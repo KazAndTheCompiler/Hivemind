@@ -25,11 +25,11 @@ Working through 70 cybersecurity projects from beginner to advanced.
 - [x] 18. Build a tool to detect unusual activities
 - [x] 19. Analyze malware to understand its behavior
 - [x] 20. Set up TLS for secure communication
-- [ ] 21. Learn how zero-day exploits work
-- [ ] 22. Use anonymous tools like Tor for privacy
-- [ ] 23. Set up a honeypot to gather threat data
-- [ ] 24. Practice cracking passwords with GPUs
-- [ ] 25. Create a browser extension for security
+- [x] 21. Learn how zero-day exploits work
+- [x] 22. Use anonymous tools like Tor for privacy
+- [x] 23. Set up a honeypot to gather threat data
+- [x] 24. Practice cracking passwords with GPUs
+- [x] 25. Create a browser extension for security
 
 ### Intermediate (26-50)
 - [ ] 26. Build a malware analysis sandbox

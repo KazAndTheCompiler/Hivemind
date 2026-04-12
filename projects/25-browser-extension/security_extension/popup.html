@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            min-width: 300px;
+            padding: 15px;
+            background: #f5f5f5;
+        }
+        h2 {
+            margin: 0 0 15px 0;
+            color: #333;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+        .secure {
+            background: #d4edda;
+            color: #155724;
+        }
+        .insecure {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .info {
+            background: #fff;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .info-item:last-child {
+            border-bottom: none;
+        }
+        .label {
+            color: #666;
+        }
+        .value {
+            font-weight: bold;
+            color: #333;
+        }
+        .warning {
+            background: #fff3cd;
+            color: #856404;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h2>🔒 Security Status</h2>
+    
+    <div id="status" class="status secure">Checking...</div>
+    
+    <div id="info" class="info" style="display: none;">
+        <div class="info-item">
+            <span class="label">Page:</span>
+            <span class="value" id="url">-</span>
+        </div>
+        <div class="info-item">
+            <span class="label">Protocol:</span>
+            <span class="value" id="protocol">-</span>
+        </div>
+        <div class="info-item">
+            <span class="label">Login Forms:</span>
+            <span class="value" id="forms">-</span>
+        </div>
+        <div class="info-item">
+            <span class="label">Insecure Cookies:</span>
+            <span class="value" id="cookies">-</span>
+        </div>
+    </div>
+    
+    <div id="warning" class="warning" style="display: none;">
+        ⚠️ This page contains login forms but doesn't use HTTPS!
+    </div>
+    
+    <script src="popup.js"></script>
+</body>
+</html>
