@@ -9,7 +9,7 @@ Working through 70 cybersecurity projects from beginner to advanced.
 - [x] 2. Create a simple password cracker
 - [x] 3. Build a tool to sniff network traffic
 - [x] 4. Make a basic keylogger for practice
-- [ ] 5. Learn digital forensic analysis skills
+- [x] 5. Learn digital forensic analysis skills
 - [ ] 6. Create a personal cybersecurity lab at home
 - [ ] 7. Practice encrypting files with cryptography
 - [ ] 8. Simulate a phishing campaign for awareness
