@@ -32,11 +32,11 @@ Working through 70 cybersecurity projects from beginner to advanced.
 - [x] 25. Create a browser extension for security
 
 ### Intermediate (26-50)
-- [ ] 26. Build a malware analysis sandbox
-- [ ] 27. Encrypt data with full disk encryption
-- [ ] 28. Use machine learning for intrusion detection
-- [ ] 29. Test secure routing protocols
-- [ ] 30. Create a secure cryptocurrency wallet
+- [x] 26. Build a malware analysis sandbox
+- [x] 27. Encrypt data with full disk encryption
+- [x] 28. Use machine learning for intrusion detection
+- [x] 29. Test secure routing protocols
+- [x] 30. Create a secure cryptocurrency wallet
 - [ ] 31. Study rootkits and how to remove them
 - [ ] 32. Build a dark web scraper for research
 - [ ] 33. Simulate a DDoS attack in a safe environment
