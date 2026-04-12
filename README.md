@@ -20,11 +20,11 @@ Working through 70 cybersecurity projects from beginner to advanced.
 - [x] 13. Build a secure web application
 - [x] 14. Set up and use Snort for intrusion detection
 - [x] 15. Use tools to find system vulnerabilities
-- [ ] 16. Practice detecting DNS spoofing attacks
-- [ ] 17. Study how antivirus software works
-- [ ] 18. Build a tool to detect unusual activities
-- [ ] 19. Analyze malware to understand its behavior
-- [ ] 20. Set up TLS for secure communication
+- [x] 16. Practice detecting DNS spoofing attacks
+- [x] 17. Study how antivirus software works
+- [x] 18. Build a tool to detect unusual activities
+- [x] 19. Analyze malware to understand its behavior
+- [x] 20. Set up TLS for secure communication
 - [ ] 21. Learn how zero-day exploits work
 - [ ] 22. Use anonymous tools like Tor for privacy
 - [ ] 23. Set up a honeypot to gather threat data
