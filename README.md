@@ -15,11 +15,11 @@ Working through 70 cybersecurity projects from beginner to advanced.
 - [x] 8. Simulate a phishing campaign for awareness
 - [x] 9. Test Wi-Fi security at home
 - [x] 10. Scan networks for vulnerabilities
-- [ ] 11. Configure firewall rules to block threats
-- [ ] 12. Create a two-factor authentication system
-- [ ] 13. Build a secure web application
-- [ ] 14. Set up and use Snort for intrusion detection
-- [ ] 15. Use tools to find system vulnerabilities
+- [x] 11. Configure firewall rules to block threats
+- [x] 12. Create a two-factor authentication system
+- [x] 13. Build a secure web application
+- [x] 14. Set up and use Snort for intrusion detection
+- [x] 15. Use tools to find system vulnerabilities
 - [ ] 16. Practice detecting DNS spoofing attacks
 - [ ] 17. Study how antivirus software works
 - [ ] 18. Build a tool to detect unusual activities
