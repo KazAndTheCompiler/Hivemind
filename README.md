@@ -6,7 +6,7 @@ Working through 70 cybersecurity projects from beginner to advanced.
 
 ### Beginner (1-25)
 - [x] 1. Set up a basic honeypot to catch attackers
-- [ ] 2. Create a simple password cracker
+- [x] 2. Create a simple password cracker
 - [ ] 3. Build a tool to sniff network traffic
 - [ ] 4. Make a basic keylogger for practice
 - [ ] 5. Learn digital forensic analysis skills
