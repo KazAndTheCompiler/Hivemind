@@ -12,7 +12,7 @@ Working through 70 cybersecurity projects from beginner to advanced.
 - [x] 5. Learn digital forensic analysis skills
 - [x] 6. Create a personal cybersecurity lab at home
 - [x] 7. Practice encrypting files with cryptography
-- [ ] 8. Simulate a phishing campaign for awareness
+- [x] 8. Simulate a phishing campaign for awareness
 - [ ] 9. Test Wi-Fi security at home
 - [ ] 10. Scan networks for vulnerabilities
 - [ ] 11. Configure firewall rules to block threats
