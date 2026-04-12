@@ -14,7 +14,7 @@ Working through 70 cybersecurity projects from beginner to advanced.
 - [x] 7. Practice encrypting files with cryptography
 - [x] 8. Simulate a phishing campaign for awareness
 - [x] 9. Test Wi-Fi security at home
-- [ ] 10. Scan networks for vulnerabilities
+- [x] 10. Scan networks for vulnerabilities
 - [ ] 11. Configure firewall rules to block threats
 - [ ] 12. Create a two-factor authentication system
 - [ ] 13. Build a secure web application
