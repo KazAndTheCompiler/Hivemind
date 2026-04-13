@@ -1,0 +1,13 @@
+{
+  "name": "@secdev/lab-honeypot-basic",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Basic honeypot setup lab — educational exercise for catching attackers",
+  "scripts": {
+    "run": "python honeypot.py",
+    "test": "echo 'No tests yet'",
+    "lint": "echo 'No linting configured'"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

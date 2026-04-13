@@ -1,0 +1,11 @@
+{
+  "name": "@secdev/tool-password-cracker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Password cracking utility for educational purposes",
+  "scripts": {
+    "run": "python password_cracker.py",
+    "test": "echo 'No tests yet'",
+    "lint": "echo 'No linting configured'"
+  }
+}

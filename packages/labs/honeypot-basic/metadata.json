@@ -1,0 +1,37 @@
+{
+  "type": "lab",
+  "id": "lab-honeypot-basic",
+  "title": "Basic Honeypot Lab",
+  "summary": "Set up a basic honeypot to catch and observe attackers in a controlled environment.",
+  "category": "network-security",
+  "tags": ["honeypot", "network-security", "threat-detection", "beginner"],
+  "language": "python",
+  "maturity": "stable",
+  "riskLevel": "low",
+  "safetyBoundary": "defensive",
+  "prerequisites": ["Basic Linux knowledge", "Python 3.x", "Network fundamentals"],
+  "setupSteps": [
+    "Install Python 3.x",
+    "Review honeypot.py source code",
+    "Configure listening port",
+    "Start honeypot in isolated environment"
+  ],
+  "expectedOutputs": ["Connection logs", "Attacker behavior data", "IP address records"],
+  "testStatus": "none",
+  "docsPath": "/docs/labs/honeypot-basic",
+  "owner": "secdev-team",
+  "maintainer": "secdev-team",
+  "sourceLegacyPath": "projects/01-honeypot-basic",
+  "walkthrough": [
+    "Step 1: Review the honeypot source code",
+    "Step 2: Configure the listening port and logging",
+    "Step 3: Start the honeypot and monitor connections",
+    "Step 4: Analyze captured data"
+  ],
+  "cleanupSteps": [
+    "Stop the honeypot process",
+    "Review and archive logs",
+    "Clean up any temporary files"
+  ],
+  "estimatedDuration": "45m"
+}

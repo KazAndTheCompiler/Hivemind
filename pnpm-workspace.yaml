@@ -1,0 +1,9 @@
+packages:
+  - 'packages/shared/*'
+  - 'packages/labs/*'
+  - 'packages/tools/*'
+  - 'packages/detections/*'
+  - 'packages/defense/*'
+  - 'packages/forensics/*'
+  - 'apps/*'
+  - 'content/*'

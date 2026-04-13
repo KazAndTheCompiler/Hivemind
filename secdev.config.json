@@ -1,0 +1,16 @@
+{
+  "rootPath": ".",
+  "artifactPath": "./artifacts",
+  "fixturesPath": "./fixtures",
+  "docsPath": "./docs",
+  "logLevel": "info",
+  "allowedExecutionModes": ["dry-run", "simulation", "analysis-only"],
+  "restrictedLabToggle": false,
+  "environmentValidation": true,
+  "packageDiscoveryConfig": {
+    "packagesPath": "./packages",
+    "includePatterns": ["**/*"],
+    "excludePatterns": ["**/node_modules/**", "**/dist/**"],
+    "metadataFileName": "metadata.json"
+  }
+}

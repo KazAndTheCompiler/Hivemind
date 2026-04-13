@@ -1,0 +1,23 @@
+{
+  "type": "tool",
+  "id": "tool-password-cracker",
+  "title": "Password Cracker",
+  "summary": "Educational password cracking tool demonstrating brute-force and dictionary attack patterns.",
+  "category": "cryptography",
+  "tags": ["password-cracking", "brute-force", "dictionary-attack", "beginner"],
+  "language": "python",
+  "maturity": "stable",
+  "riskLevel": "medium",
+  "safetyBoundary": "dual-use",
+  "prerequisites": ["Python 3.x", "Basic cryptography knowledge"],
+  "setupSteps": ["Install Python 3.x", "Prepare wordlist file"],
+  "expectedOutputs": ["Cracked passwords", "Timing statistics"],
+  "testStatus": "none",
+  "docsPath": "/docs/tools/password-cracker",
+  "owner": "secdev-team",
+  "maintainer": "secdev-team",
+  "sourceLegacyPath": "projects/02-password-cracker",
+  "inputs": ["Password hash", "Wordlist file"],
+  "outputs": ["Cracked password or failure message"],
+  "cliUsage": "python password_cracker.py <hash> [wordlist]"
+}

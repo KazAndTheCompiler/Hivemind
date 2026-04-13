@@ -1,0 +1,23 @@
+{
+  "type": "defense",
+  "id": "defense-firewall-setup",
+  "title": "Firewall Setup & Rule Configuration",
+  "summary": "Configure firewall rules to block threats and harden network perimeter defenses.",
+  "category": "network-security",
+  "tags": ["firewall", "iptables", "network-hardening", "beginner"],
+  "language": "shell",
+  "maturity": "stable",
+  "riskLevel": "low",
+  "safetyBoundary": "defensive",
+  "prerequisites": ["Linux system administration", "Network protocols knowledge"],
+  "setupSteps": ["Review current firewall rules", "Apply hardened ruleset", "Verify connectivity"],
+  "expectedOutputs": ["Hardened firewall configuration", "Rule audit log"],
+  "testStatus": "none",
+  "docsPath": "/docs/defense/firewall-setup",
+  "owner": "secdev-team",
+  "maintainer": "secdev-team",
+  "sourceLegacyPath": "projects/11-firewall-setup",
+  "hardeningTarget": "network-perimeter",
+  "baselineConfig": "iptables",
+  "complianceFrameworks": ["CIS", "NIST-800-53"]
+}

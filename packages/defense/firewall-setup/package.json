@@ -1,0 +1,11 @@
+{
+  "name": "@secdev/defense-firewall-setup",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Firewall setup and rule configuration for network hardening",
+  "scripts": {
+    "run": "bash firewall_setup.sh",
+    "test": "echo 'No tests yet'",
+    "lint": "echo 'No linting configured'"
+  }
+}

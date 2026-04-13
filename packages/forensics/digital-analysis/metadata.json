@@ -1,0 +1,23 @@
+{
+  "type": "forensics",
+  "id": "forensics-digital-analysis",
+  "title": "Digital Forensic Analysis",
+  "summary": "Learn digital forensic analysis skills for incident response and evidence collection.",
+  "category": "forensics",
+  "tags": ["forensics", "incident-response", "evidence-collection", "beginner"],
+  "language": "python",
+  "maturity": "stable",
+  "riskLevel": "low",
+  "safetyBoundary": "analysis",
+  "prerequisites": ["File system knowledge", "Basic Python"],
+  "setupSteps": ["Install Python 3.x", "Prepare sample disk image", "Run analysis"],
+  "expectedOutputs": ["Forensic report", "Timeline analysis", "Evidence records"],
+  "testStatus": "none",
+  "docsPath": "/docs/forensics/digital-analysis",
+  "owner": "secdev-team",
+  "maintainer": "secdev-team",
+  "sourceLegacyPath": "projects/05-digital-forensics",
+  "evidenceTypes": ["disk-image", "file-system", "registry-artifacts"],
+  "analysisMethods": ["timeline-analysis", "file-carving", "metadata-extraction"],
+  "toolsRequired": ["Python 3.x", "forensics.py"]
+}

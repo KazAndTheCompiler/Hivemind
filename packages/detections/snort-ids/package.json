@@ -1,0 +1,11 @@
+{
+  "name": "@secdev/detection-snort-ids",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Snort IDS setup and detection rules",
+  "scripts": {
+    "run": "bash snort_setup.sh",
+    "test": "echo 'No tests yet'",
+    "lint": "echo 'No linting configured'"
+  }
+}

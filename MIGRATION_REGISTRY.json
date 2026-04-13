@@ -1,0 +1,44 @@
+[
+  {
+    "legacyPath": "projects/01-honeypot-basic",
+    "targetDomain": "labs",
+    "targetPackage": "@secdev/lab-honeypot-basic",
+    "status": "pending",
+    "notes": "Basic honeypot setup lab"
+  },
+  {
+    "legacyPath": "projects/02-password-cracker",
+    "targetDomain": "tools",
+    "targetPackage": "@secdev/tool-password-cracker",
+    "status": "pending",
+    "notes": "Password cracking utility"
+  },
+  {
+    "legacyPath": "projects/03-network-sniffer",
+    "targetDomain": "tools",
+    "targetPackage": "@secdev/tool-network-sniffer",
+    "status": "pending",
+    "notes": "Network packet capture tool"
+  },
+  {
+    "legacyPath": "projects/05-digital-forensics",
+    "targetDomain": "forensics",
+    "targetPackage": "@secdev/forensics-digital-analysis",
+    "status": "pending",
+    "notes": "Digital forensics workflow"
+  },
+  {
+    "legacyPath": "projects/14-snort-ids",
+    "targetDomain": "detections",
+    "targetPackage": "@secdev/detection-snort-ids",
+    "status": "pending",
+    "notes": "Snort IDS detection rules"
+  },
+  {
+    "legacyPath": "projects/11-firewall-setup",
+    "targetDomain": "defense",
+    "targetPackage": "@secdev/defense-firewall-setup",
+    "status": "pending",
+    "notes": "Firewall hardening guide"
+  }
+]

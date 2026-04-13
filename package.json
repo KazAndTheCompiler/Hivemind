@@ -1,0 +1,29 @@
+{
+  "name": "secdev-labs",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SecDev Labs — A TypeScript-first cybersecurity engineering monorepo",
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "doctor": "pnpm --filter @secdev/shared-cli exec secdev doctor",
+    "list": "pnpm --filter @secdev/shared-cli exec secdev list",
+    "inventory": "pnpm --filter @secdev/shared-cli exec secdev inventory",
+    "validate": "pnpm --filter @secdev/shared-cli exec secdev validate"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.1",
+    "eslint": "^8.56.0",
+    "@typescript-eslint/eslint-plugin": "^6.19.1",
+    "@typescript-eslint/parser": "^6.19.1",
+    "prettier": "^3.2.4"
+  },
+  "packageManager": "pnpm@8.15.1"
+}

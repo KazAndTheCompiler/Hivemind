@@ -1,0 +1,29 @@
+{
+  "name": "@secdev/shared-cli",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Common CLI for SecDev Labs — secdev",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "secdev": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@secdev/shared-types": "workspace:*",
+    "@secdev/shared-config": "workspace:*",
+    "@secdev/shared-logger": "workspace:*",
+    "@secdev/shared-schemas": "workspace:*",
+    "@secdev/shared-utils": "workspace:*",
+    "@secdev/shared-testing": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.1",
+    "@types/node": "^20.11.5"
+  }
+}
