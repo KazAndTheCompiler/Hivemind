@@ -29,6 +29,8 @@ import { LocalSecDevAdapter } from '@openclaw/tool-secdev';
 import { ChangedFileQualityService } from '@openclaw/change-detector';
 import { LocalEslintRunner } from '@openclaw/tool-eslint';
 import { LocalPrettierRunner } from '@openclaw/tool-prettier';
+import { CheckpointOrchestrator } from '@openclaw/automation-checkpoints';
+import { SummaryEmitter } from '@openclaw/automation-summary';
 import * as fs from 'fs';
 
 export interface ColdStartCheckResult {
@@ -68,6 +70,10 @@ export class OrchestratorService {
   private auditStore: DurableFileAuditStore;
   private secdevAdapter: LocalSecDevAdapter;
   private qualityService: ChangedFileQualityService;
+  private checkpointOrchestrator: CheckpointOrchestrator;
+  private summaryEmitter: SummaryEmitter;
+  private driftCounter = 0;
+  private readonly DRIFT_THRESHOLD = 3;
   private running = false;
   private pendingOperations = new Set<Promise<unknown>>();
   private pipelineHalted = false;
@@ -117,6 +123,8 @@ export class OrchestratorService {
       new LocalPrettierRunner(this.logger),
       this.secdevAdapter,
     );
+    this.checkpointOrchestrator = new CheckpointOrchestrator();
+    this.summaryEmitter = new SummaryEmitter();
 
     const memoryPath = `${config.audit.storePath}/memory`;
     const memorySink = new DurableFileSink(memoryPath, this.logger);
@@ -219,10 +227,50 @@ export class OrchestratorService {
       const semanticGuardResult = this.runSemanticGuard(normalized);
       if (!semanticGuardResult.passed) {
         normalized.toolFindings.push(...semanticGuardResult.findings);
+        this.driftCounter++;
         this.logger.warn('orchestrator.semantic_guard.failed', {
           taskId,
           issues: semanticGuardResult.issues,
+          driftCounter: this.driftCounter,
+          threshold: this.DRIFT_THRESHOLD,
         });
+
+        if (this.driftCounter >= this.DRIFT_THRESHOLD) {
+          this.logger.error('orchestrator.drift.escalation', {
+            taskId,
+            driftCounter: this.driftCounter,
+            issues: semanticGuardResult.issues,
+          });
+          await this.eventBus.emit({
+            kind: 'orchestrator.halted' as any,
+            schemaVersion: 'v1',
+            sequence: 0,
+            streamId: taskId,
+            reason: `drift threshold exceeded: ${this.driftCounter} failures`,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      } else {
+        this.driftCounter = 0;
+      }
+
+      if (this.checkpointOrchestrator.shouldCheckpoint()) {
+        const checkpointSummary = this.summaryEmitter.emitCheckpointSummary({
+          id: `run_${Date.now()}`,
+          mode: 'checkpoint',
+          status: normalized.toolFindings.some(f => f.severity === 'critical' || f.severity === 'high') ? 'failed' : 'passed',
+          startedAt: new Date().toISOString(),
+          completedAt: new Date().toISOString(),
+          results: [],
+        } as any, {
+          touchedAreas: normalized.touchedFiles,
+          hotspots: [],
+          architecturalNotes: [],
+          suspectedRisks: [],
+          summary: normalized.conciseSummary,
+        });
+        this.logger.info('orchestrator.checkpoint.triggered', { taskId, summary: checkpointSummary.slice(0, 200) });
+        await this.checkpointOrchestrator.executeCheckpoint();
       }
 
       const { relay200, relay300 } = await this.condenseService.condenseAndEmit(normalized);
