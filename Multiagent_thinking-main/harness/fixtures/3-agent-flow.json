@@ -1,0 +1,28 @@
+{
+  "id": "3-agent-flow",
+  "name": "3-Agent Flow",
+  "description": "Planner → Builder → Tester relay with TypeScript interfaces",
+  "task": "Build a snake game in JavaScript",
+  "agents": [
+    {
+      "id": "planner",
+      "role": "Creates ADR (Architecture Decision Record)",
+      "interface": "ADRSchema",
+      "requiredFields": ["taskId", "agent", "objective", "ownedFiles"]
+    },
+    {
+      "id": "builder",
+      "role": "Implements from ADR, emits Progress",
+      "interface": "Progress",
+      "requiredFields": ["phase", "done", "blockers"]
+    },
+    {
+      "id": "tester",
+      "role": "Verifies builder output, emits VerificationSchema",
+      "interface": "VerificationSchema",
+      "requiredFields": ["taskId", "verified", "confidence", "findings"]
+    }
+  ],
+  "flow": "emission",
+  "expectedPassRate": 1.0
+}

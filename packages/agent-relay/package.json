@@ -1,0 +1,26 @@
+{
+  "name": "@openclaw/agent-relay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Main agent relay service — handoff delivery to main agent channel",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "test": "vitest run --passWithNoTests",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@openclaw/core-types": "workspace:*",
+    "@openclaw/core-events": "workspace:*",
+    "@openclaw/core-logging": "workspace:*",
+    "@openclaw/core-errors": "workspace:*",
+    "@openclaw/agent-protocol": "workspace:*",
+    "@openclaw/condense-engine": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.1"
+  }
+}

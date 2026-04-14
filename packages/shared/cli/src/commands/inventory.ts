@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { findPackages, loadMetadata, formatTable } from '@secdev/shared-utils';
 import { createLogger } from '@secdev/shared-logger';
+import type { LabMetadata } from '@secdev/shared-types';
 
 export async function inventoryCommand(rootPath: string, format: 'human' | 'json' = 'human'): Promise<void> {
   const logger = createLogger('@secdev/cli', 'inventory');
@@ -13,7 +14,7 @@ export async function inventoryCommand(rootPath: string, format: 'human' | 'json
   }
 
   const packages = findPackages(packagesPath);
-  const byDomain: Record<string, any[]> = {
+  const byDomain: Record<string, Array<Record<string, string>>> = {
     labs: [],
     tools: [],
     detections: [],
@@ -25,7 +26,7 @@ export async function inventoryCommand(rootPath: string, format: 'human' | 'json
 
   for (const pkgPath of packages) {
     try {
-      const meta = loadMetadata(pkgPath);
+      const meta = loadMetadata(pkgPath) as LabMetadata;
       const domain = meta.type ?? 'unknown';
       const domainKey = domain === 'lab' ? 'labs' : domain === 'tool' ? 'tools' : domain === 'detection' ? 'detections' : domain === 'defense' ? 'defense' : domain === 'forensics' ? 'forensics' : 'unknown';
       byDomain[domainKey].push({

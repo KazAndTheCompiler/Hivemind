@@ -78,11 +78,9 @@ export class JsonLogger implements Logger {
 
 export class HumanLogger implements Logger {
   private packageId: PackageId;
-  private commandName: string;
 
-  constructor(packageId: PackageId, commandName: string) {
+  constructor(packageId: PackageId, _commandName: string) {
     this.packageId = packageId;
-    this.commandName = commandName;
   }
 
   debug(message: string, _data?: Record<string, unknown>): void {

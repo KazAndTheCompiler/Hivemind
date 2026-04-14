@@ -1,0 +1,10 @@
+wing: watson_palace
+rooms:
+- name: wings
+  description: Files from wings/
+  keywords:
+  - wings
+  - wings
+- name: general
+  description: Files that don't fit other rooms
+  keywords: []

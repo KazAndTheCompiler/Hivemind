@@ -1,0 +1,29 @@
+{
+  "name": "@openclaw/change-detector",
+  "version": "0.1.0",
+  "private": true,
+  "description": "File change detection service — maps files to packages, triggers quality gates",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "test": "vitest run --passWithNoTests",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "execa": "^8.0.1",
+    "@openclaw/core-types": "workspace:*",
+    "@openclaw/core-events": "workspace:*",
+    "@openclaw/core-logging": "workspace:*",
+    "@openclaw/core-errors": "workspace:*",
+    "@openclaw/tool-gitnexus": "workspace:*",
+    "@openclaw/tool-eslint": "workspace:*",
+    "@openclaw/tool-prettier": "workspace:*",
+    "@openclaw/tool-secdev": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.1"
+  }
+}

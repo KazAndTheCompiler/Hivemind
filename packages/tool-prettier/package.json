@@ -1,0 +1,24 @@
+{
+  "name": "@openclaw/tool-prettier",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Scoped Prettier runner — runs only on changed supported files",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "test": "vitest run --passWithNoTests",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    
+    "@openclaw/core-types": "workspace:*",
+    "@openclaw/core-events": "workspace:*",
+    "@openclaw/core-logging": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.1"
+  }
+}

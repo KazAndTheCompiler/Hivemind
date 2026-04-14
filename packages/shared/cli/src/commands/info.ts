@@ -1,7 +1,7 @@
-import fs from 'fs';
 import path from 'path';
 import { loadMetadata, findPackages, getSafetyLabel, getRiskBadge } from '@secdev/shared-utils';
 import { createLogger } from '@secdev/shared-logger';
+import type { LabMetadata } from '@secdev/shared-types';
 
 export async function infoCommand(rootPath: string, packageId: string, format: 'human' | 'json' = 'human'): Promise<void> {
   const logger = createLogger('@secdev/cli', 'info');
@@ -11,7 +11,7 @@ export async function infoCommand(rootPath: string, packageId: string, format: '
   let found = false;
   for (const pkgPath of packages) {
     try {
-      const meta = loadMetadata(pkgPath);
+      const meta = loadMetadata(pkgPath) as LabMetadata;
       if (meta.id === packageId) {
         found = true;
         const relPath = path.relative(rootPath, pkgPath);

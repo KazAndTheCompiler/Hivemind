@@ -1,0 +1,24 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist"],
+  "references": [
+    { "path": "../../packages/core-types" },
+    { "path": "../../packages/core-config" },
+    { "path": "../../packages/core-events" },
+    { "path": "../../packages/core-logging" },
+    { "path": "../../packages/core-errors" },
+    { "path": "../../packages/agent-protocol" },
+    { "path": "../../packages/agent-relay" },
+    { "path": "../../packages/agent-router" },
+    { "path": "../../packages/agent-memory" },
+    { "path": "../../packages/summarizer" },
+    { "path": "../../packages/condense-engine" },
+    { "path": "../../packages/change-detector" },
+    { "path": "../../packages/audit-store" }
+  ]
+}

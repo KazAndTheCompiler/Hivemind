@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { findPackages, loadMetadata, getSafetyLabel } from '@secdev/shared-utils';
 import { createLogger } from '@secdev/shared-logger';
-import { ExecutionMode } from '@secdev/shared-types';
+import { ExecutionMode, LabMetadata } from '@secdev/shared-types';
 
 export async function runCommand(rootPath: string, packageId: string, mode: string = 'dry-run', format: 'human' | 'json' = 'human'): Promise<void> {
   const logger = createLogger('@secdev/cli', 'run', format === 'json' ? 'json' : 'human', mode as ExecutionMode);
@@ -12,7 +12,7 @@ export async function runCommand(rootPath: string, packageId: string, mode: stri
   let found = false;
   for (const pkgPath of packages) {
     try {
-      const meta = loadMetadata(pkgPath);
+      const meta = loadMetadata(pkgPath) as LabMetadata;
       if (meta.id === packageId) {
         found = true;
         const relPath = path.relative(rootPath, pkgPath);

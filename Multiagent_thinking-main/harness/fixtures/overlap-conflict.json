@@ -1,0 +1,23 @@
+{
+  "id": "overlap-conflict",
+  "name": "Overlap Conflict Scenario",
+  "description": "Two agents want to work on the same file - should trigger conflict resolution",
+  "task": "Build a calculator with two agents both wanting index.js",
+  "agents": [
+    {
+      "id": "agent-1",
+      "name": "Frontend",
+      "ownedFiles": ["index.js", "ui.js"],
+      "forbiddenFiles": ["calc.js"]
+    },
+    {
+      "id": "agent-2",
+      "name": "Backend",
+      "ownedFiles": ["calc.js", "engine.js"],
+      "forbiddenFiles": ["ui.js"]
+    }
+  ],
+  "conflictFile": "index.js",
+  "expectedResolution": "agent-1 owns index.js, agent-2 redirected to calc.js",
+  "flow": "emission"
+}

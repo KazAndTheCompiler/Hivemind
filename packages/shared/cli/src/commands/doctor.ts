@@ -2,10 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import { findPackages, validateMetadata } from '@secdev/shared-utils';
 import { ConfigLoader } from '@secdev/shared-config';
-import { createLogger } from '@secdev/shared-logger';
 
 export async function doctorCommand(rootPath: string, format: 'human' | 'json' = 'human'): Promise<void> {
-  const logger = createLogger('@secdev/cli', 'doctor');
   const checks: { name: string; status: 'pass' | 'fail' | 'warn'; message: string }[] = [];
 
   // Check 1: Root package.json exists

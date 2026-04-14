@@ -1,0 +1,27 @@
+{
+  "name": "@openclaw/condense-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Deterministic condensing pipeline — 200/300 token relay summaries",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "test": "vitest run",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@openclaw/core-types": "workspace:*",
+    "@openclaw/core-schemas": "workspace:*",
+    "@openclaw/core-tokenizer": "workspace:*",
+    "@openclaw/core-events": "workspace:*",
+    "@openclaw/core-logging": "workspace:*",
+    "@openclaw/core-errors": "workspace:*",
+    "@openclaw/agent-protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.1"
+  }
+}

@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { findPackages, loadMetadata, formatTable } from '@secdev/shared-utils';
+import { formatTable } from '@secdev/shared-utils';
 import { createLogger } from '@secdev/shared-logger';
 
 export async function migrateCommand(rootPath: string, args: string[], format: 'human' | 'json' = 'human'): Promise<void> {

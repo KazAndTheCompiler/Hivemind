@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { findPackages, loadMetadata, formatTable } from '@secdev/shared-utils';
 import { createLogger } from '@secdev/shared-logger';
+import type { LabMetadata } from '@secdev/shared-types';
 
 export async function graphCommand(rootPath: string, format: 'human' | 'json' = 'human'): Promise<void> {
   const logger = createLogger('@secdev/cli', 'graph');
@@ -18,7 +19,7 @@ export async function graphCommand(rootPath: string, format: 'human' | 'json' = 
 
   for (const pkgPath of packages) {
     try {
-      const meta = loadMetadata(pkgPath);
+      const meta = loadMetadata(pkgPath) as LabMetadata;
       const domain = meta.type === 'lab' ? 'labs' : meta.type === 'tool' ? 'tools' : meta.type === 'detection' ? 'detections' : meta.type === 'defense' ? 'defense' : meta.type === 'forensics' ? 'forensics' : 'unknown';
       nodes.push({
         id: meta.id,

@@ -1,0 +1,36 @@
+{
+  "name": "@openclaw/daemon",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Watch daemon — monitors file changes, triggers quality gates, systemd-friendly",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "openclaw-daemon": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "start": "node dist/index.js",
+    "test": "vitest run --passWithNoTests",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "chokidar": "^3.5.3",
+    "@openclaw/core-types": "workspace:*",
+    "@openclaw/core-config": "workspace:*",
+    "@openclaw/core-events": "workspace:*",
+    "@openclaw/core-logging": "workspace:*",
+    "@openclaw/core-errors": "workspace:*",
+    "@openclaw/tool-gitnexus": "workspace:*",
+    "@openclaw/tool-eslint": "workspace:*",
+    "@openclaw/tool-prettier": "workspace:*",
+    "@openclaw/tool-secdev": "workspace:*",
+    "@openclaw/change-detector": "workspace:*",
+    "@openclaw/audit-store": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.1"
+  }
+}

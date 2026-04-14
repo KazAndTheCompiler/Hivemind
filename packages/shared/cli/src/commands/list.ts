@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { loadMetadata, findPackages, getSafetyLabel, getRiskBadge, formatTable } from '@secdev/shared-utils';
 import { createLogger } from '@secdev/shared-logger';
+import type { LabMetadata } from '@secdev/shared-types';
 
 export async function listCommand(rootPath: string, format: 'human' | 'json' = 'human'): Promise<void> {
   const logger = createLogger('@secdev/cli', 'list');
@@ -13,11 +14,11 @@ export async function listCommand(rootPath: string, format: 'human' | 'json' = '
   }
 
   const packages = findPackages(packagesPath);
-  const rows: any[] = [];
+  const rows: Record<string, string>[] = [];
 
   for (const pkgPath of packages) {
     try {
-      const meta = loadMetadata(pkgPath);
+      const meta = loadMetadata(pkgPath) as LabMetadata;
       const relPath = path.relative(rootPath, pkgPath);
       rows.push({
         ID: meta.id,

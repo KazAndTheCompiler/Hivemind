@@ -1,0 +1,23 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist"],
+  "references": [
+    { "path": "../../packages/core-types" },
+    { "path": "../../packages/core-config" },
+    { "path": "../../packages/core-events" },
+    { "path": "../../packages/core-logging" },
+    { "path": "../../packages/core-errors" },
+    { "path": "../../packages/tool-gitnexus" },
+    { "path": "../../packages/tool-eslint" },
+    { "path": "../../packages/tool-prettier" },
+    { "path": "../../packages/tool-secdev" },
+    { "path": "../../packages/change-detector" },
+    { "path": "../../packages/audit-store" },
+    { "path": "../../packages/core-schemas" }
+  ]
+}

@@ -1,11 +1,10 @@
 import fs from 'fs';
 import path from 'path';
 import { AnyMetadataSchema } from '@secdev/shared-schemas';
-import type { PackageId } from '@secdev/shared-types';
 
 const METADATA_FILE = 'metadata.json';
 
-export function loadMetadata(packagePath: string): any {
+export function loadMetadata(packagePath: string): unknown {
   const metadataPath = path.join(packagePath, METADATA_FILE);
   if (!fs.existsSync(metadataPath)) {
     throw new Error(`Metadata file not found: ${metadataPath}`);
@@ -15,7 +14,7 @@ export function loadMetadata(packagePath: string): any {
   return AnyMetadataSchema.parse(parsed);
 }
 
-export function findPackages(rootPath: string, includePattern = '**/*'): string[] {
+export function findPackages(rootPath: string, _includePattern = '**/*'): string[] {
   const packages: string[] = [];
 
   function scan(dir: string) {

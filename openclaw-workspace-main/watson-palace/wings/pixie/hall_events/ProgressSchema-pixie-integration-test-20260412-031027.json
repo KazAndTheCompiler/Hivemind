@@ -1,0 +1,18 @@
+{
+  "type": "ProgressSchema",
+  "version": "1.0",
+  "taskId": "pixie-integration-test",
+  "agent": "pixie",
+  "phase": "verification",
+  "done": [
+    "created ~/toolshed/scripts/sysinfo.sh",
+    "verified JSON output format",
+    "indexed emission to MemPalace"
+  ],
+  "blockers": [],
+  "next": "run MemPalace search to verify storage",
+  "touchedFiles": [
+    "~/toolshed/scripts/sysinfo.sh",
+    "~/watson-palace/wings/pixie/hall_events/"
+  ]
+}

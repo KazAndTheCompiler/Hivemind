@@ -1,0 +1,11 @@
+{
+  "id": "emission-snake-game",
+  "name": "Emission Single-Task Snake Game",
+  "description": "Emission flow with ADR + bounded worker + ollama filter for a snake game task",
+  "task": "Build a snake game in JavaScript",
+  "files": ["snake.html", "snake.js", "snake.css"],
+  "expectedFrontierCalls": 2,
+  "expectedWorkerCalls": 1,
+  "expectedTokens": 549,
+  "flow": "emission"
+}

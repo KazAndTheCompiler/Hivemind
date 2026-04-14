@@ -1,0 +1,22 @@
+{
+  "name": "@openclaw/core-logging",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Structured logging service with pino",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "test": "echo 'No tests yet'",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "pino": "^8.17.2",
+    "@openclaw/core-types": "workspace:*",
+    "@openclaw/core-config": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}

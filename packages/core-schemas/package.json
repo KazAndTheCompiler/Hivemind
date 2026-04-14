@@ -1,0 +1,22 @@
+{
+  "name": "@openclaw/core-schemas",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Zod runtime validation schemas for agent protocol",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "test": "vitest run",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.22.4",
+    "@openclaw/core-types": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.1"
+  }
+}

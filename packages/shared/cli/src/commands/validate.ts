@@ -1,4 +1,3 @@
-import fs from 'fs';
 import path from 'path';
 import { findPackages, validateMetadata } from '@secdev/shared-utils';
 import { createLogger } from '@secdev/shared-logger';

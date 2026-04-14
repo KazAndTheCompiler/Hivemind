@@ -1,0 +1,23 @@
+{
+  "name": "@openclaw/testing",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Test fixtures and helpers for OpenClaw packages",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "test": "vitest run --passWithNoTests",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@openclaw/core-types": "workspace:*",
+    "@openclaw/core-schemas": "workspace:*",
+    "@openclaw/agent-protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.1"
+  }
+}

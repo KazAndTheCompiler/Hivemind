@@ -1,0 +1,18 @@
+{
+  "type": "ProgressSchema",
+  "version": "1.0",
+  "taskId": "pixie-heartbeat",
+  "agent": "pixie",
+  "phase": "heartbeat",
+  "done": ["system check complete"],
+  "blockers": [],
+  "next": "waiting for task",
+  "touchedFiles": [],
+  "metadata": {
+    "host": "srv1410193",
+    "memory_free": "5861640 KB",
+    "disk_free": "82507264 KB", 
+    "load_avg": "0.01,0.36,0.60",
+    "timestamp": "2026-04-12T09:15:01+00:00"
+  }
+}

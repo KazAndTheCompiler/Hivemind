@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import path from 'path';
 import { listCommand } from './commands/list';
 import { infoCommand } from './commands/info';
 import { runCommand } from './commands/run';

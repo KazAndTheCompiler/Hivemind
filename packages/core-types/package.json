@@ -1,0 +1,20 @@
+{
+  "name": "@openclaw/core-types",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Canonical TypeScript types for agent protocol, events, and coordination",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "test": "echo 'No tests yet'",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}

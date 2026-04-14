@@ -1,8 +1,8 @@
 {
-  "name": "secdev-labs",
+  "name": "openclaw-labs",
   "version": "0.1.0",
   "private": true,
-  "description": "SecDev Labs — A TypeScript-first cybersecurity engineering monorepo",
+  "description": "OpenClaw Production Scaffold — TypeScript-first agent coordination monorepo",
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test",
@@ -11,10 +11,13 @@
     "doctor": "pnpm --filter @secdev/shared-cli exec secdev doctor",
     "list": "pnpm --filter @secdev/shared-cli exec secdev list",
     "inventory": "pnpm --filter @secdev/shared-cli exec secdev inventory",
-    "validate": "pnpm --filter @secdev/shared-cli exec secdev validate"
+    "validate": "pnpm --filter @secdev/shared-cli exec secdev validate",
+    "orchestrator": "pnpm --filter @openclaw/orchestrator start",
+    "daemon": "pnpm --filter @openclaw/daemon start",
+    "openclaw": "pnpm --filter @openclaw/cli openclaw"
   },
   "engines": {
-    "node": ">=18.0.0",
+    "node": ">=20.0.0",
     "pnpm": ">=8.0.0"
   },
   "devDependencies": {
@@ -23,7 +26,9 @@
     "eslint": "^8.56.0",
     "@typescript-eslint/eslint-plugin": "^6.19.1",
     "@typescript-eslint/parser": "^6.19.1",
-    "prettier": "^3.2.4"
+    "prettier": "^3.2.4",
+    "tsup": "^8.0.1",
+    "@types/node": "^20.11.0"
   },
   "packageManager": "pnpm@8.15.1"
 }
