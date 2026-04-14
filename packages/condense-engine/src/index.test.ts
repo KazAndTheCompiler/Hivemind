@@ -4,7 +4,9 @@ import { createLogger } from '@openclaw/core-logging';
 import { SummaryCondenseService } from './index';
 import type { NormalizedAgentSummary } from '@openclaw/core-types';
 
-function createNormalizedSummary(overrides: Partial<NormalizedAgentSummary> = {}): NormalizedAgentSummary {
+function createNormalizedSummary(
+  overrides: Partial<NormalizedAgentSummary> = {},
+): NormalizedAgentSummary {
   return {
     taskId: 'task-1',
     agentId: 'worker-1',
@@ -45,8 +47,20 @@ describe('SummaryCondenseService', () => {
   it('condenses to 300-token relay with findings', () => {
     const summary = createNormalizedSummary({
       toolFindings: [
-        { source: 'eslint', severity: 'high', code: 'ERR', message: 'Error found', fileRefs: ['src/a.ts'] },
-        { source: 'secdev', severity: 'critical', code: 'SEC', message: 'Security issue', fileRefs: ['src/b.ts'] },
+        {
+          source: 'eslint',
+          severity: 'high',
+          code: 'ERR',
+          message: 'Error found',
+          fileRefs: ['src/a.ts'],
+        },
+        {
+          source: 'secdev',
+          severity: 'critical',
+          code: 'SEC',
+          message: 'Security issue',
+          fileRefs: ['src/b.ts'],
+        },
       ],
     });
     const { relay300 } = service.condense(summary);
@@ -61,7 +75,9 @@ describe('SummaryCondenseService', () => {
 
   it('computes critical severity from findings', () => {
     const summary = createNormalizedSummary({
-      toolFindings: [{ source: 'secdev', severity: 'critical', code: 'X', message: 'X', fileRefs: [] }],
+      toolFindings: [
+        { source: 'secdev', severity: 'critical', code: 'X', message: 'X', fileRefs: [] },
+      ],
     });
     const { relay200 } = service.condense(summary);
     expect(relay200.severity).toBe('critical');

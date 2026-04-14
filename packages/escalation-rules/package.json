@@ -1,0 +1,21 @@
+{
+  "name": "@openclaw/escalation-rules",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Escalation Rules — when to call frontier vs handle locally",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "test": "vitest run --passWithNoTests",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@openclaw/core-types": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.1"
+  }
+}

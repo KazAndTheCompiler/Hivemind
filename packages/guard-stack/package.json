@@ -1,0 +1,25 @@
+{
+  "name": "@openclaw/guard-stack",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Guard Stack — TypeScriptGuard → SemanticGuard → Retry → Escalation",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "test": "vitest run --passWithNoTests",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@openclaw/core-types": "workspace:*",
+    "@openclaw/typescript-guard": "workspace:*",
+    "@openclaw/semantic-guard": "workspace:*",
+    "@openclaw/retry-policy": "workspace:*",
+    "@openclaw/escalation-rules": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.1"
+  }
+}

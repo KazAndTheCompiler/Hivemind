@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts"],
+  "references": [
+    { "path": "../../packages/core-types" },
+    { "path": "../../packages/typescript-guard" },
+    { "path": "../../packages/semantic-guard" },
+    { "path": "../../packages/retry-policy" },
+    { "path": "../../packages/escalation-rules" }
+  ]
+}

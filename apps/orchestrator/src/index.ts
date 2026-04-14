@@ -31,6 +31,7 @@ import { LocalEslintRunner } from '@openclaw/tool-eslint';
 import { LocalPrettierRunner } from '@openclaw/tool-prettier';
 import { CheckpointOrchestrator } from '@openclaw/automation-checkpoints';
 import { SummaryEmitter } from '@openclaw/automation-summary';
+import { GuardStack, createGuardStack } from '@openclaw/guard-stack';
 import * as fs from 'fs';
 
 export interface ColdStartCheckResult {
@@ -72,6 +73,7 @@ export class OrchestratorService {
   private qualityService: ChangedFileQualityService;
   private checkpointOrchestrator: CheckpointOrchestrator;
   private summaryEmitter: SummaryEmitter;
+  private guardStack: GuardStack;
   private driftCounter = 0;
   private readonly DRIFT_THRESHOLD = 3;
   private running = false;
@@ -125,6 +127,7 @@ export class OrchestratorService {
     );
     this.checkpointOrchestrator = new CheckpointOrchestrator();
     this.summaryEmitter = new SummaryEmitter();
+    this.guardStack = createGuardStack({ maxRetries: 3, costThreshold: 1000 });
 
     const memoryPath = `${config.audit.storePath}/memory`;
     const memorySink = new DurableFileSink(memoryPath, this.logger);
@@ -231,6 +234,55 @@ export class OrchestratorService {
         summary: normalized,
       });
       normalized.toolFindings.push(...secdevFindings);
+
+      const guardResult = this.guardStack.validateSummary(
+        normalized.conciseSummary,
+        normalized.touchedFiles,
+        normalized.blockers,
+        normalized.nextActions,
+      );
+      steps.push({ step: 'guard_stack', success: guardResult.passed, durationMs: Date.now() - startTime });
+
+      if (!guardResult.passed) {
+        this.driftCounter++;
+        this.logger.warn('orchestrator.guard_stack.failed', {
+          taskId,
+          stage: guardResult.stage,
+          issues: guardResult.issues,
+          driftCounter: this.driftCounter,
+          threshold: this.DRIFT_THRESHOLD,
+          shouldRetry: guardResult.shouldRetry,
+          shouldEscalate: guardResult.shouldEscalate,
+        });
+
+        if (guardResult.shouldEscalate && guardResult.escalationMessage) {
+          this.logger.error('orchestrator.escalation', {
+            taskId,
+            escalationType: guardResult.escalationMessage.type,
+            frontierAction: guardResult.escalationMessage.action,
+            reason: guardResult.escalationMessage.reason,
+          });
+          await this.eventBus.emit({
+            kind: 'orchestrator.halted' as any,
+            schemaVersion: 'v1',
+            sequence: 0,
+            streamId: taskId,
+            reason: `escalation: ${guardResult.escalationMessage.type} - ${guardResult.escalationMessage.action}`,
+            timestamp: new Date().toISOString(),
+          });
+        }
+
+        if (this.driftCounter >= this.DRIFT_THRESHOLD) {
+          this.logger.error('orchestrator.drift.halted', {
+            taskId,
+            driftCounter: this.driftCounter,
+          });
+          this.pipelineHalted = true;
+        }
+      } else {
+        this.driftCounter = 0;
+        this.guardStack.reset();
+      }
 
       const qualityResult = await this.qualityService.runQualityGate(normalized.touchedFiles);
       normalized.toolFindings.push(...qualityResult.findings);

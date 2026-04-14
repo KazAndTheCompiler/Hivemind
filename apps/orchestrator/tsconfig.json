@@ -24,6 +24,7 @@
     { "path": "../../packages/tool-eslint" },
     { "path": "../../packages/tool-prettier" },
     { "path": "../../packages/automation-checkpoints" },
-    { "path": "../../packages/automation-summary" }
+    { "path": "../../packages/automation-summary" },
+    { "path": "../../packages/guard-stack" }
   ]
 }
