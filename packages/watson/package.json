@@ -1,23 +1,24 @@
 {
-  "name": "@openclaw/agent-relay",
+  "name": "@openclaw/watson",
   "version": "0.1.0",
   "private": true,
-  "description": "Main agent relay service — handoff delivery to main agent channel",
+  "description": "Watson — schema-to-schema compression filter, no LLM inference",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc --build",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@openclaw/core-types": "workspace:*",
+    "@openclaw/core-schemas": "workspace:*",
+    "@openclaw/core-tokenizer": "workspace:*",
     "@openclaw/core-events": "workspace:*",
     "@openclaw/core-logging": "workspace:*",
     "@openclaw/core-errors": "workspace:*",
-    "@openclaw/agent-protocol": "workspace:*",
-    "@openclaw/watson": "workspace:*"
+    "@openclaw/agent-protocol": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.3.3",

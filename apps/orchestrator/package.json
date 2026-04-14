@@ -26,7 +26,7 @@
     "@openclaw/agent-router": "workspace:*",
     "@openclaw/agent-memory": "workspace:*",
     "@openclaw/summarizer": "workspace:*",
-    "@openclaw/condense-engine": "workspace:*",
+    "@openclaw/watson": "workspace:*",
     "@openclaw/change-detector": "workspace:*",
     "@openclaw/audit-store": "workspace:*",
     "@openclaw/tool-secdev": "workspace:*",

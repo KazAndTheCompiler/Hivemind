@@ -38,7 +38,7 @@ OpenClaw is a TypeScript-first agent coordination layer that sits between worker
 | Package | Purpose |
 |---------|---------|
 | `@openclaw/summarizer` | AgentSummaryIngestService + SummaryNormalizationService |
-| `@openclaw/condense-engine` | SummaryCondenseService — 200/300 token relay generation |
+| `@openclaw/watson` | WatsonFilter — schema-to-schema compression, no LLM inference |
 | `@openclaw/change-detector` | ChangedFileQualityService — runs quality gate on changed files |
 | `@openclaw/audit-store` | AuditStore — persistence + dead-letter queue |
 

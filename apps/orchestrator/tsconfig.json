@@ -17,7 +17,7 @@
     { "path": "../../packages/agent-router" },
     { "path": "../../packages/agent-memory" },
     { "path": "../../packages/summarizer" },
-    { "path": "../../packages/condense-engine" },
+    { "path": "../../packages/watson" },
     { "path": "../../packages/change-detector" },
     { "path": "../../packages/audit-store" },
     { "path": "../../packages/tool-secdev" },

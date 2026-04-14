@@ -20,7 +20,7 @@ import { EventBus } from '@openclaw/core-events';
 import { Logger, createLoggerFromConfig } from '@openclaw/core-logging';
 import { ConfigService } from '@openclaw/core-config';
 import { AgentSummaryIngestService, SummaryNormalizationService } from '@openclaw/summarizer';
-import { SummaryCondenseService } from '@openclaw/condense-engine';
+import { SummaryCondenseService } from '@openclaw/watson';
 import { MainAgentRelayService } from '@openclaw/agent-relay';
 import { AgentRouter } from '@openclaw/agent-router';
 import { AgentMemory, DurableFileSink } from '@openclaw/agent-memory';
@@ -272,7 +272,15 @@ export class OrchestratorService {
           });
         }
 
-        if (this.driftCounter >= this.DRIFT_THRESHOLD) {
+        if (guardResult.shouldRetry && guardResult.attempt < 3) {
+          const backoffMs = this.guardStack.getBackoffMs(guardResult.attempt);
+          this.logger.info('orchestrator.guard.retrying', {
+            taskId,
+            attempt: guardResult.attempt,
+            backoffMs,
+          });
+          await new Promise((resolve) => setTimeout(resolve, backoffMs));
+        } else if (this.driftCounter >= this.DRIFT_THRESHOLD) {
           this.logger.error('orchestrator.drift.halted', {
             taskId,
             driftCounter: this.driftCounter,
@@ -293,36 +301,6 @@ export class OrchestratorService {
             .length === 0,
         durationMs: Date.now() - startTime,
       });
-
-      const semanticGuardResult = this.runSemanticGuard(normalized);
-      if (!semanticGuardResult.passed) {
-        normalized.toolFindings.push(...semanticGuardResult.findings);
-        this.driftCounter++;
-        this.logger.warn('orchestrator.semantic_guard.failed', {
-          taskId,
-          issues: semanticGuardResult.issues,
-          driftCounter: this.driftCounter,
-          threshold: this.DRIFT_THRESHOLD,
-        });
-
-        if (this.driftCounter >= this.DRIFT_THRESHOLD) {
-          this.logger.error('orchestrator.drift.escalation', {
-            taskId,
-            driftCounter: this.driftCounter,
-            issues: semanticGuardResult.issues,
-          });
-          await this.eventBus.emit({
-            kind: 'orchestrator.halted' as any,
-            schemaVersion: 'v1',
-            sequence: 0,
-            streamId: taskId,
-            reason: `drift threshold exceeded: ${this.driftCounter} failures`,
-            timestamp: new Date().toISOString(),
-          });
-        }
-      } else {
-        this.driftCounter = 0;
-      }
 
       if (this.checkpointOrchestrator.shouldCheckpoint()) {
         const checkpointSummary = this.summaryEmitter.emitCheckpointSummary(
@@ -574,77 +552,6 @@ export class OrchestratorService {
     if (hasBlockers) {
       normalized.confidence = Math.max(0, normalized.confidence - 0.15);
     }
-  }
-
-  private runSemanticGuard(normalized: NormalizedAgentSummary): SemanticGuardResult {
-    const issues: string[] = [];
-    const findings: ToolFinding[] = [];
-    const text = [normalized.conciseSummary, ...normalized.blockers, ...normalized.nextActions]
-      .join(' ')
-      .toLowerCase();
-
-    const emptyDone = normalized.conciseSummary.trim().length === 0;
-    const hasBlockers = normalized.blockers.length > 0;
-    if (emptyDone && !hasBlockers) {
-      issues.push('empty_done_no_blockers');
-      findings.push({
-        source: 'secdev',
-        severity: 'low',
-        code: 'SEMANTIC_EMPTY_DONE',
-        message: 'Empty summary without blockers is anomalous',
-        fileRefs: [],
-        suggestedAction: 'Provide a summary or declare blockers',
-      });
-    }
-
-    const fileCount = normalized.touchedFiles.length;
-    if (fileCount === 0) {
-      issues.push('no_file_references');
-      findings.push({
-        source: 'secdev',
-        severity: 'low',
-        code: 'SEMANTIC_NO_FILE_REFS',
-        message: 'No file references in touchedFiles',
-        fileRefs: [],
-        suggestedAction: 'Include file paths that were modified',
-      });
-    }
-
-    const actionVerbs = /create|update|delete|fix|implement|refactor|test|add|remove|modify|patch/i;
-    if (!actionVerbs.test(text)) {
-      issues.push('no_action_verbs');
-      findings.push({
-        source: 'secdev',
-        severity: 'low',
-        code: 'SEMANTIC_NO_ACTION_VERBS',
-        message: 'No action verbs detected in summary',
-        fileRefs: [],
-        suggestedAction: 'Use action verbs: create, update, delete, fix, implement, refactor, test',
-      });
-    }
-
-    const forbiddenPhrases = [
-      'completed task',
-      'worked on',
-      'made changes',
-      'did stuff',
-      'something',
-    ];
-    for (const phrase of forbiddenPhrases) {
-      if (text.includes(phrase)) {
-        issues.push(`forbidden_phrase: ${phrase}`);
-        findings.push({
-          source: 'secdev',
-          severity: 'low',
-          code: 'SEMANTIC_FORBIDDEN_PHRASE',
-          message: `Forbidden phrase detected: "${phrase}"`,
-          fileRefs: [],
-          suggestedAction: 'Replace generic phrases with specific descriptions',
-        });
-      }
-    }
-
-    return { passed: issues.length === 0, issues, findings };
   }
 
   static computeQualityScore(gate: {

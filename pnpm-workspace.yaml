@@ -4,7 +4,7 @@ packages:
   - 'packages/agent-*'
   - 'packages/tool-*'
   - 'packages/summarizer'
-  - 'packages/condense-engine'
+  - 'packages/watson'
   - 'packages/change-detector'
   - 'packages/audit-store'
   - 'packages/testing'
