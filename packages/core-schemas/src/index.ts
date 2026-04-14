@@ -215,6 +215,33 @@ export const WorkerEmitEventSchema = z.object({
   timestamp: z.string(),
 });
 
+export const RelayDeliveredEventSchema = z.object({
+  kind: z.literal('relay.delivered'),
+  taskId: z.string(),
+  severity: SeveritySchema,
+  inboxSize: z.number(),
+  timestamp: z.string(),
+});
+
+export const RelayDeliveryFailedEventSchema = z.object({
+  kind: z.literal('relay.delivery_failed'),
+  taskId: z.string(),
+  reason: z.string(),
+  timestamp: z.string(),
+});
+
+export const GitNexusChangeDetectedEventSchema = z.object({
+  kind: z.literal('gitnexus.change.detected'),
+  files: z.array(z.string()),
+  packageNames: z.array(z.string()),
+  diff: z.object({
+    added: z.number(),
+    removed: z.number(),
+    modified: z.number(),
+  }),
+  timestamp: z.string(),
+});
+
 // Discriminated union of all OpenClaw events
 export const OpenClawEventSchema = z.discriminatedUnion('kind', [
   FileChangeEventSchema,
@@ -229,6 +256,9 @@ export const OpenClawEventSchema = z.discriminatedUnion('kind', [
   OrchestratorStartEventSchema,
   OrchestratorShutdownEventSchema,
   WorkerEmitEventSchema,
+  RelayDeliveredEventSchema,
+  RelayDeliveryFailedEventSchema,
+  GitNexusChangeDetectedEventSchema,
 ]);
 
 // ---------------------------------------------------------------------------

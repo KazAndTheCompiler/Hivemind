@@ -2,6 +2,7 @@
 
 import { createOrchestrator } from '@openclaw/orchestrator';
 import { createDaemon } from '@openclaw/daemon';
+import { ConfigService } from '@openclaw/core-config';
 import { createLogger } from '@openclaw/core-logging';
 
 function printUsage(): void {
@@ -18,9 +19,10 @@ Commands:
   help              Show this help message
 
 Environment:
-  OPENCLAW_CONFIG   Path to config file (JSON)
-  OPENCLAW_LOG_LEVEL  Log level (trace|debug|info|warn|error)
-  OPENCLAW_LOG_FORMAT Log format (json|human)
+  OPENCLAW_CONFIG        Path to config file (JSON)
+  OPENCLAW_LOG_LEVEL     Log level (trace|debug|info|warn|error)
+  OPENCLAW_LOG_FORMAT    Log format (json|human)
+  OPENCLAW_AUDIT_PATH    Path to audit store directory
 `);
 }
 
@@ -62,8 +64,27 @@ async function cmdDaemon(): Promise<void> {
 }
 
 async function cmdStatus(): Promise<void> {
-  const orchestrator = createOrchestrator();
-  console.log('OpenClaw Status:', JSON.stringify(orchestrator.status, null, 2));
+  try {
+    const orchestrator = createOrchestrator();
+    const status = orchestrator.status;
+    console.log('OpenClaw Status:', JSON.stringify(status, null, 2));
+  } catch (err) {
+    console.error('Failed to get status:', err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  }
+}
+
+async function cmdConfig(): Promise<void> {
+  try {
+    const configService = ConfigService.fromFileOrDefaults(process.env.OPENCLAW_CONFIG);
+    const config = configService.getConfig();
+    const sources = configService.getSources();
+    console.log('OpenClaw Config Sources:', JSON.stringify(sources, null, 2));
+    console.log('OpenClaw Config:', JSON.stringify(config, null, 2));
+  } catch (err) {
+    console.error('Failed to load config:', err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  }
 }
 
 async function main(): Promise<void> {
@@ -78,6 +99,9 @@ async function main(): Promise<void> {
       break;
     case 'status':
       await cmdStatus();
+      break;
+    case 'config':
+      await cmdConfig();
       break;
     case 'help':
     case '--help':

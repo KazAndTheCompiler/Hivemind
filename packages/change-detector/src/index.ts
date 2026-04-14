@@ -1,4 +1,5 @@
-// File change detection service — maps files to packages, triggers quality gates
+// File change detection and quality gate service
+// Runs Prettier, ESLint, and SecDev on changed files
 
 import type {
   QualityGateResult,
@@ -6,7 +7,7 @@ import type {
 } from '@openclaw/core-types';
 import { EventBus } from '@openclaw/core-events';
 import { Logger } from '@openclaw/core-logging';
-import type { EslintRunner } from '@openclaw/tool-eslint';
+import type { EslintRunner, EslintRunResult } from '@openclaw/tool-eslint';
 import type { PrettierRunner } from '@openclaw/tool-prettier';
 import type { SecDevAdapter } from '@openclaw/tool-secdev';
 
@@ -58,8 +59,12 @@ export class ChangedFileQualityService {
     const result: QualityGateResult = {
       kind: 'quality.gate.completed',
       changedFiles: files,
-      prettier: prettierResult,
-      eslint: eslintResult,
+      prettier: {
+        ran: prettierResult.ran,
+        formattedFiles: prettierResult.formattedFiles,
+        failedFiles: prettierResult.failedFiles,
+      },
+      eslint: eslintResultToSummary(eslintResult),
       findings,
       timestamp: new Date().toISOString(),
     };
@@ -68,8 +73,10 @@ export class ChangedFileQualityService {
       fileCount: files.length,
       prettierFormatted: prettierResult.formattedFiles.length,
       prettierFailed: prettierResult.failedFiles.length,
+      prettierCrashed: prettierResult.crashed,
       eslintFixed: eslintResult.fixedFiles.length,
       eslintFailed: eslintResult.failedFiles.length,
+      eslintCrashed: eslintResult.crashed,
       eslintWarnings: eslintResult.warnings,
       eslintErrors: eslintResult.errors,
       findingCount: findings.length,
@@ -79,4 +86,14 @@ export class ChangedFileQualityService {
 
     return result;
   }
+}
+
+function eslintResultToSummary(result: EslintRunResult): QualityGateResult['eslint'] {
+  return {
+    ran: result.ran,
+    fixedFiles: result.fixedFiles,
+    failedFiles: result.failedFiles,
+    warnings: result.warnings,
+    errors: result.errors,
+  };
 }

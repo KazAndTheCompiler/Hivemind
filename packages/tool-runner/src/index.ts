@@ -1,9 +1,9 @@
 // Subprocess execution service with timeout/error handling
-// Uses child_process to avoid ESM/CJS conflicts
+// Uses child_process.execFile with argument arrays for path-safe execution
 
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 import { Logger } from '@openclaw/core-logging';
 
@@ -13,15 +13,21 @@ export interface ExecutionResult {
   stderr: string;
   durationMs: number;
   timedOut: boolean;
+  killed: boolean;
 }
 
 export class ToolRunner {
   private logger: Logger;
   private defaultTimeoutMs: number;
+  private cwd: string;
 
-  constructor(logger: Logger, defaultTimeoutMs = 120_000) {
+  constructor(
+    logger: Logger,
+    options?: { defaultTimeoutMs?: number; cwd?: string },
+  ) {
     this.logger = logger.child({ service: 'ToolRunner' });
-    this.defaultTimeoutMs = defaultTimeoutMs;
+    this.defaultTimeoutMs = options?.defaultTimeoutMs ?? 120_000;
+    this.cwd = options?.cwd ?? process.cwd();
   }
 
   async run(
@@ -30,21 +36,22 @@ export class ToolRunner {
     options?: { timeoutMs?: number; cwd?: string },
   ): Promise<ExecutionResult> {
     const timeout = options?.timeoutMs ?? this.defaultTimeoutMs;
-    const cmd = `${command} ${args.join(' ')}`;
+    const cwd = options?.cwd ?? this.cwd;
     const start = Date.now();
 
-    this.logger.debug('tool.run.start', { command, args, timeout, cwd: options?.cwd });
+    this.logger.debug('tool.run.start', { command, args, timeout, cwd });
 
     try {
-      const { stdout, stderr } = await execAsync(cmd, {
+      const { stdout, stderr } = await execFileAsync(command, args, {
         timeout,
-        cwd: options?.cwd,
+        cwd,
       });
 
       const duration = Date.now() - start;
 
       this.logger.info('tool.run.complete', {
         command,
+        args,
         durationMs: duration,
         stdoutLen: stdout.length,
         stderrLen: stderr.length,
@@ -56,25 +63,30 @@ export class ToolRunner {
         stderr,
         durationMs: duration,
         timedOut: false,
+        killed: false,
       };
     } catch (err) {
       const duration = Date.now() - start;
-      const timedOut = err instanceof Error && err.message.includes('timed out');
-      const exitCode = timedOut ? 124 : 1;
+      const nodeErr = err as { code?: string; stdout?: string; stderr?: string; message: string };
+      const timedOut = nodeErr.code === 'ETIMEDOUT' || nodeErr.message.includes('timed out');
+      const killed = nodeErr.code === 'ABORT_ERR';
 
       this.logger.error('tool.run.error', {
         command,
+        args,
         durationMs: duration,
         timedOut,
-        error: err instanceof Error ? err.message : String(err),
+        killed,
+        error: nodeErr.message,
       });
 
       return {
-        exitCode,
-        stdout: '',
-        stderr: err instanceof Error ? err.message : String(err),
+        exitCode: timedOut ? 124 : killed ? 137 : 1,
+        stdout: nodeErr.stdout ?? '',
+        stderr: nodeErr.stderr ?? nodeErr.message,
         durationMs: duration,
         timedOut,
+        killed,
       };
     }
   }

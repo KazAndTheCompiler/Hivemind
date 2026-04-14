@@ -1,4 +1,6 @@
 // Typed EventBus with discriminated union event handling
+// Backpressure-safe, with structured failure capture and correlation IDs
+
 import type { OpenClawEvent, OpenClawEventKind } from '@openclaw/core-types';
 import { createLogger, Logger } from '@openclaw/core-logging';
 
@@ -10,7 +12,16 @@ export interface Subscription {
   unsubscribe(): void;
 }
 
+export interface EventProcessingResult {
+  event: OpenClawEvent;
+  handlerCount: number;
+  succeeded: number;
+  failed: number;
+  errors: Array<{ handler: string; error: string }>;
+}
+
 const MAX_BUFFER_SIZE = 1000;
+const OVERFLOW_POLICY: 'drop_oldest' | 'reject_new' | 'dead_letter' = 'dead_letter';
 
 export class EventBus {
   private handlers = new Map<OpenClawEventKind, Set<EventHandler>>();
@@ -18,7 +29,10 @@ export class EventBus {
   private buffer: OpenClawEvent[] = [];
   private processing = false;
   private logger: Logger;
-  private deadLetterHandler?: (event: OpenClawEvent, reason: string) => void;
+  private deadLetterHandler?: (event: OpenClawEvent, reason: string) => void | Promise<void>;
+  private _overflowCount = 0;
+  private _totalProcessed = 0;
+  private _totalFailures = 0;
 
   constructor(logger?: Logger) {
     this.logger = logger ?? createLogger();
@@ -51,18 +65,31 @@ export class EventBus {
   }
 
   setDeadLetterHandler(
-    handler: (event: OpenClawEvent, reason: string) => void,
+    handler: (event: OpenClawEvent, reason: string) => void | Promise<void>,
   ): void {
     this.deadLetterHandler = handler;
   }
 
   async emit(event: OpenClawEvent): Promise<void> {
-    // Backpressure-safe buffering
+    // Backpressure: check buffer capacity
     if (this.buffer.length >= MAX_BUFFER_SIZE) {
-      this.logger.warn('event.buffer.full', { size: this.buffer.length });
-      if (this.deadLetterHandler) {
-        this.deadLetterHandler(event, 'buffer_full');
+      this._overflowCount++;
+      this.logger.warn('event.buffer.full', {
+        size: this.buffer.length,
+        overflowCount: this._overflowCount,
+        policy: OVERFLOW_POLICY,
+      });
+
+      if (OVERFLOW_POLICY === 'dead_letter' && this.deadLetterHandler) {
+        await this.deadLetterHandler(event, 'buffer_overflow');
+      } else if (OVERFLOW_POLICY === 'drop_oldest') {
+        this.buffer.shift(); // drop oldest
+        this.buffer.push(event);
+      } else if (OVERFLOW_POLICY === 'reject_new') {
+        // Event is dropped — logged above
+        return;
       }
+
       return;
     }
 
@@ -80,25 +107,64 @@ export class EventBus {
       const event = this.buffer.shift()!;
       const kind = event.kind;
 
+      const result: EventProcessingResult = {
+        event,
+        handlerCount: 0,
+        succeeded: 0,
+        failed: 0,
+        errors: [],
+      };
+
       try {
         // Fire kind-specific handlers
         const kindHandlers = this.handlers.get(kind);
         if (kindHandlers) {
-          const promises = Array.from(kindHandlers).map((h) =>
-            Promise.resolve(h(event)),
-          );
-          await Promise.allSettled(promises);
+          result.handlerCount += kindHandlers.size;
+          const handlerPromises = Array.from(kindHandlers).map(async (h) => {
+            try {
+              await Promise.resolve(h(event));
+              result.succeeded++;
+            } catch (err) {
+              result.failed++;
+              result.errors.push({
+                handler: h.name || 'anonymous',
+                error: err instanceof Error ? err.message : String(err),
+              });
+            }
+          });
+          await Promise.all(handlerPromises);
         }
 
         // Fire catch-all handlers
-        const catchAllPromises = Array.from(this.catchAll).map((h) =>
-          Promise.resolve(h(event)),
-        );
-        await Promise.allSettled(catchAllPromises);
+        const catchAllPromises = Array.from(this.catchAll).map(async (h) => {
+          try {
+            await Promise.resolve(h(event));
+            result.succeeded++;
+          } catch (err) {
+            result.failed++;
+            result.errors.push({
+              handler: h.name || 'anonymous_catchall',
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        });
+        await Promise.all(catchAllPromises);
       } catch (err) {
-        this.logger.error('event.handler.error', {
+        // This catch is for unexpected errors in the processing loop itself
+        this.logger.error('event.processing.error', {
           kind,
           error: err instanceof Error ? err.message : String(err),
+        });
+      }
+
+      this._totalProcessed++;
+      if (result.failed > 0) {
+        this._totalFailures++;
+        this.logger.warn('event.handler.failures', {
+          kind,
+          handlerCount: result.handlerCount,
+          failed: result.failed,
+          errors: result.errors.slice(0, 5), // cap logged errors
         });
       }
     }
@@ -112,5 +178,25 @@ export class EventBus {
 
   get bufferSize(): number {
     return this.buffer.length;
+  }
+
+  /** Number of events dropped due to buffer overflow */
+  get overflowCount(): number {
+    return this._overflowCount;
+  }
+
+  /** Total events successfully processed */
+  get totalProcessed(): number {
+    return this._totalProcessed;
+  }
+
+  /** Total handler failures across all processed events */
+  get totalFailures(): number {
+    return this._totalFailures;
+  }
+
+  /** Current capacity utilization as a fraction */
+  get capacityUtilization(): number {
+    return this.buffer.length / MAX_BUFFER_SIZE;
   }
 }

@@ -9,7 +9,7 @@ import type {
 } from '@openclaw/core-types';
 import { EventBus } from '@openclaw/core-events';
 import { Logger } from '@openclaw/core-logging';
-import { countTokens, truncateToBudget } from '@openclaw/core-tokenizer';
+import { countTokensObject, truncatePayloadToBudget } from '@openclaw/core-tokenizer';
 
 // ---------------------------------------------------------------------------
 // SummaryCondenseService — normalized → 200/300 token relay
@@ -30,8 +30,8 @@ export class SummaryCondenseService {
 
     this.logger.info('summary.condensed', {
       taskId: normalized.taskId,
-      tokens200: countTokens(JSON.stringify(relay200)),
-      tokens300: countTokens(JSON.stringify(relay300)),
+      tokens200: countTokensObject(relay200),
+      tokens300: countTokensObject(relay300),
       severity: relay200.severity,
     });
 
@@ -56,51 +56,50 @@ export class SummaryCondenseService {
     const nextAction = normalized.nextActions[0] ?? null;
     const severity = this.computeSeverity(normalized);
 
-    // Truncate summary to fit 200 token budget
-    const summaryBudget = 120; // reserve tokens for metadata
-    const truncatedSummary = truncateToBudget(normalized.conciseSummary, summaryBudget);
-
-    return {
+    const base: CondensedRelay200 = {
       version: 'relay.v1',
       budget: 200,
       taskId: normalized.taskId,
       agentId: normalized.agentId,
       status: normalized.status,
-      summary: truncatedSummary,
+      summary: normalized.conciseSummary,
       touchedFiles: normalized.touchedFiles.slice(0, 5),
       blockers: normalized.blockers.slice(0, 2),
       nextAction,
       severity,
       confidence: normalized.confidence,
     };
+
+    // Guarantee the full payload fits within 200 tokens
+    return truncatePayloadToBudget<CondensedRelay200>(base, 200);
   }
 
   private build300(normalized: NormalizedAgentSummary): CondensedRelay300 {
     // Preserve more evidence: full nextActions, top findings
     const severity = this.computeSeverity(normalized);
 
-    const summaryBudget = 200;
-    const truncatedSummary = truncateToBudget(normalized.conciseSummary, summaryBudget);
+    const rankedFindings = this.rankFindings(normalized.toolFindings);
 
-    const topFindings = this.rankFindings(normalized.toolFindings).slice(0, 3);
-
-    return {
+    const base: CondensedRelay300 = {
       version: 'relay.v1',
       budget: 300,
       taskId: normalized.taskId,
       agentId: normalized.agentId,
       status: normalized.status,
-      summary: truncatedSummary,
+      summary: normalized.conciseSummary,
       touchedFiles: normalized.touchedFiles.slice(0, 10),
-      blockers: normalized.blockers,
-      nextActions: normalized.nextActions,
-      topFindings,
+      blockers: normalized.blockers.slice(0, 5),
+      nextActions: normalized.nextActions.slice(0, 5),
+      topFindings: rankedFindings.slice(0, 3),
       severity,
       confidence: normalized.confidence,
     };
+
+    // Guarantee the full payload fits within 300 tokens
+    return truncatePayloadToBudget<CondensedRelay300>(base, 300);
   }
 
-  private computeSeverity(normalized: NormalizedAgentSummary): Severity {
+  computeSeverity(normalized: NormalizedAgentSummary): Severity {
     // Critical findings → critical
     const hasCritical = normalized.toolFindings.some(
       (f) => f.severity === 'critical',
@@ -125,7 +124,7 @@ export class SummaryCondenseService {
     return 'none';
   }
 
-  private rankFindings(findings: ToolFinding[]): ToolFinding[] {
+  rankFindings(findings: ToolFinding[]): ToolFinding[] {
     const severityOrder: Record<string, number> = {
       critical: 0,
       high: 1,

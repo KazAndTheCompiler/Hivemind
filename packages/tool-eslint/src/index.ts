@@ -1,65 +1,142 @@
 // Scoped ESLint runner — runs only on changed TS/JS files
-// Uses child_process to avoid ESM/CJS conflicts with execa
+// Uses child_process.execFile with arg arrays for path-safe subprocess execution
 
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 import type { ToolFinding } from '@openclaw/core-types';
 import { Logger } from '@openclaw/core-logging';
+import * as path from 'path';
 
-export interface EslintResult {
+export interface EslintRunResult {
   ran: boolean;
   fixedFiles: string[];
   failedFiles: string[];
   warnings: number;
   errors: number;
   findings: ToolFinding[];
+  crashed: boolean;
+  crashMessage?: string;
 }
 
 export interface EslintRunner {
-  run(files: string[]): Promise<EslintResult>;
+  run(files: string[]): Promise<EslintRunResult>;
+}
+
+const TS_JS_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx'];
+
+/** Filter files to only TS/JS/JSX/TSX extensions */
+function filterApplicable(files: string[]): string[] {
+  return files.filter((f) => {
+    const ext = path.extname(f).toLowerCase();
+    return TS_JS_EXTENSIONS.includes(ext);
+  });
 }
 
 export class LocalEslintRunner implements EslintRunner {
   private logger: Logger;
   private configFile?: string;
+  private cwd: string;
+  private timeoutMs: number;
 
-  constructor(logger: Logger, configFile?: string) {
+  constructor(
+    logger: Logger,
+    options?: { configFile?: string; cwd?: string; timeoutMs?: number },
+  ) {
     this.logger = logger.child({ service: 'EslintRunner' });
-    this.configFile = configFile;
+    this.configFile = options?.configFile;
+    this.cwd = options?.cwd ?? process.cwd();
+    this.timeoutMs = options?.timeoutMs ?? 60_000;
   }
 
-  async run(files: string[]): Promise<EslintResult> {
-    if (files.length === 0) {
-      return { ran: false, fixedFiles: [], failedFiles: [], warnings: 0, errors: 0, findings: [] };
+  async run(files: string[]): Promise<EslintRunResult> {
+    const applicable = filterApplicable(files);
+
+    if (applicable.length === 0) {
+      return {
+        ran: false,
+        fixedFiles: [],
+        failedFiles: [],
+        warnings: 0,
+        errors: 0,
+        findings: [],
+        crashed: false,
+      };
     }
 
-    const args = files.join(' ');
-    const configFlag = this.configFile ? `-c ${this.configFile}` : '';
-    const cmd = `npx eslint --ext .ts,.tsx,.js,.jsx --format json ${configFlag} ${args}`;
+    const args = [
+      '--ext', '.ts,.tsx,.js,.jsx',
+      '--format', 'json',
+      ...applicable,
+    ];
+
+    if (this.configFile) {
+      args.splice(0, 0, '-c', this.configFile);
+    }
+
+    this.logger.debug('eslint.run.start', {
+      fileCount: applicable.length,
+      files: applicable,
+      cwd: this.cwd,
+    });
 
     try {
-      const { stdout } = await execAsync(cmd, { timeout: 60_000 });
-      return this.parseEslintOutput(stdout, files);
+      const { stdout } = await execFileAsync('npx', ['eslint', ...args], {
+        cwd: this.cwd,
+        timeout: this.timeoutMs,
+      });
+
+      // Parse JSON output from stdout
+      return this.parseEslintOutput(stdout, applicable);
     } catch (err) {
+      const nodeErr = err as { code?: string | number; stdout?: string; stderr?: string; message: string };
+      const timedOut = nodeErr.code === 'ETIMEDOUT' || nodeErr.message.includes('timed out');
+
+      if (nodeErr.code === 2 || nodeErr.code === 'ERR_CHILD_PROCESS_FAILED' || (nodeErr.stderr && nodeErr.stderr.includes('ESLint'))) {
+        // ESLint config/runtime error — report as crashed
+        this.logger.error('eslint.crashed', {
+          code: nodeErr.code,
+          stderr: nodeErr.stderr?.slice(0, 500),
+        });
+        return {
+          ran: false,
+          fixedFiles: [],
+          failedFiles: applicable,
+          warnings: 0,
+          errors: 0,
+          findings: [],
+          crashed: true,
+          crashMessage: nodeErr.stderr?.slice(0, 500),
+        };
+      }
+
+      // ESLint found issues (exit 1) — stdout may still have JSON output
+      const output = nodeErr.stdout || '';
+      if (output.trim()) {
+        return this.parseEslintOutput(output, applicable);
+      }
+
       this.logger.error('eslint.execution.error', {
-        error: err instanceof Error ? err.message : String(err),
+        timedOut,
+        error: nodeErr.message,
       });
       return {
         ran: false,
         fixedFiles: [],
-        failedFiles: files,
+        failedFiles: applicable,
         warnings: 0,
         errors: 0,
         findings: [],
+        crashed: true,
+        crashMessage: nodeErr.message,
       };
     }
   }
 
-  private parseEslintOutput(stdout: string, files: string[]): EslintResult {
+  private parseEslintOutput(output: string, files: string[]): EslintRunResult {
     try {
-      const results = JSON.parse(stdout) as Array<{
+      const results = JSON.parse(output) as Array<{
         filePath: string;
         messages: Array<{
           ruleId: string | null;
@@ -70,11 +147,13 @@ export class LocalEslintRunner implements EslintRunner {
         }>;
         errorCount: number;
         warningCount: number;
+        fixed: boolean;
       }>;
 
       let totalWarnings = 0;
       let totalErrors = 0;
       const failedFiles: string[] = [];
+      const fixedFiles: string[] = [];
       const findings: ToolFinding[] = [];
 
       for (const file of results) {
@@ -83,6 +162,9 @@ export class LocalEslintRunner implements EslintRunner {
 
         if (file.errorCount > 0) {
           failedFiles.push(file.filePath);
+        }
+        if (file.fixed) {
+          fixedFiles.push(file.filePath);
         }
 
         for (const msg of file.messages) {
@@ -99,11 +181,12 @@ export class LocalEslintRunner implements EslintRunner {
 
       return {
         ran: true,
-        fixedFiles: [],
+        fixedFiles,
         failedFiles,
         warnings: totalWarnings,
         errors: totalErrors,
         findings,
+        crashed: false,
       };
     } catch {
       return {
@@ -113,6 +196,7 @@ export class LocalEslintRunner implements EslintRunner {
         warnings: 0,
         errors: 0,
         findings: [],
+        crashed: false,
       };
     }
   }

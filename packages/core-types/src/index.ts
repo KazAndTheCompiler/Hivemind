@@ -193,6 +193,29 @@ export interface WorkerEmitEvent {
   timestamp: string;
 }
 
+export interface RelayDeliveredEvent {
+  kind: 'relay.delivered';
+  taskId: string;
+  severity: Severity;
+  inboxSize: number;
+  timestamp: string;
+}
+
+export interface RelayDeliveryFailedEvent {
+  kind: 'relay.delivery_failed';
+  taskId: string;
+  reason: string;
+  timestamp: string;
+}
+
+export interface GitNexusChangeDetectedEvent {
+  kind: 'gitnexus.change.detected';
+  files: string[];
+  packageNames: string[];
+  diff: { added: number; removed: number; modified: number };
+  timestamp: string;
+}
+
 // Discriminated union of all event kinds
 export type OpenClawEvent =
   | FileChangeEvent
@@ -206,7 +229,10 @@ export type OpenClawEvent =
   | DeadLetterEvent
   | OrchestratorStartEvent
   | OrchestratorShutdownEvent
-  | WorkerEmitEvent;
+  | WorkerEmitEvent
+  | RelayDeliveredEvent
+  | RelayDeliveryFailedEvent
+  | GitNexusChangeDetectedEvent;
 
 export type OpenClawEventKind = OpenClawEvent['kind'];
 
