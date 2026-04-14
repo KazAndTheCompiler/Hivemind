@@ -4,7 +4,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { Logger } from '@openclaw/core-logging';
-import type { NormalizedAgentSummary, CondensedRelay200, CondensedRelay300 } from '@openclaw/core-types';
+import type {
+  NormalizedAgentSummary,
+  CondensedRelay200,
+  CondensedRelay300,
+} from '@openclaw/core-types';
 
 export interface MemoryEntry {
   key: string;
@@ -249,7 +253,9 @@ export class AgentMemory {
   }
 
   async getSummary(taskId: string): Promise<NormalizedAgentSummary | undefined> {
-    return this.sink.get(`agent:${this.agentId}:summary:${taskId}`) as Promise<NormalizedAgentSummary | undefined>;
+    return this.sink.get(`agent:${this.agentId}:summary:${taskId}`) as Promise<
+      NormalizedAgentSummary | undefined
+    >;
   }
 
   async saveRelay(relay200: CondensedRelay200, relay300: CondensedRelay300): Promise<void> {

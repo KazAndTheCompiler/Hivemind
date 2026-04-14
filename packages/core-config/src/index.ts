@@ -63,9 +63,7 @@ export class ConfigService {
   }
 
   private mergeWithEnv(raw?: unknown): Record<string, unknown> {
-    const base = typeof raw === 'object' && raw !== null
-      ? raw as Record<string, unknown>
-      : {};
+    const base = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
 
     // Environment variable overrides (explicit, validated)
     const envOverrides: Record<string, unknown> = {};
@@ -76,8 +74,10 @@ export class ConfigService {
     if (process.env.OPENCLAW_LOG_LEVEL) {
       const level = process.env.OPENCLAW_LOG_LEVEL as string;
       const validLevels = ['trace', 'debug', 'info', 'warn', 'error'] as const;
-      if (!validLevels.includes(level as typeof validLevels[number])) {
-        throw new ConfigError(`Invalid OPENCLAW_LOG_LEVEL: ${level}. Must be one of: ${validLevels.join(', ')}`);
+      if (!validLevels.includes(level as (typeof validLevels)[number])) {
+        throw new ConfigError(
+          `Invalid OPENCLAW_LOG_LEVEL: ${level}. Must be one of: ${validLevels.join(', ')}`,
+        );
       }
       envOverrides.logging = {
         ...(typeof base.logging === 'object' && base.logging !== null ? base.logging : {}),
@@ -117,17 +117,23 @@ export class ConfigService {
     if (process.env.OPENCLAW_MAX_WORKERS) {
       const maxWorkers = parseInt(process.env.OPENCLAW_MAX_WORKERS, 10);
       if (isNaN(maxWorkers) || maxWorkers < 1) {
-        throw new ConfigError(`Invalid OPENCLAW_MAX_WORKERS: ${process.env.OPENCLAW_MAX_WORKERS}. Must be a positive integer`);
+        throw new ConfigError(
+          `Invalid OPENCLAW_MAX_WORKERS: ${process.env.OPENCLAW_MAX_WORKERS}. Must be a positive integer`,
+        );
       }
       envOverrides.orchestrator = {
-        ...(typeof base.orchestrator === 'object' && base.orchestrator !== null ? base.orchestrator : {}),
+        ...(typeof base.orchestrator === 'object' && base.orchestrator !== null
+          ? base.orchestrator
+          : {}),
         maxConcurrentWorkers: maxWorkers,
       };
     }
     if (process.env.OPENCLAW_DEBOUNCE_MS) {
       const debounceMs = parseInt(process.env.OPENCLAW_DEBOUNCE_MS, 10);
       if (isNaN(debounceMs) || debounceMs < 1) {
-        throw new ConfigError(`Invalid OPENCLAW_DEBOUNCE_MS: ${process.env.OPENCLAW_DEBOUNCE_MS}. Must be a positive integer`);
+        throw new ConfigError(
+          `Invalid OPENCLAW_DEBOUNCE_MS: ${process.env.OPENCLAW_DEBOUNCE_MS}. Must be a positive integer`,
+        );
       }
       envOverrides.daemon = {
         ...(typeof base.daemon === 'object' && base.daemon !== null ? base.daemon : {}),

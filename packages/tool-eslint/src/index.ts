@@ -28,8 +28,12 @@ const TS_JS_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx'];
 /** Cancellation token for aborting long-running tool execution */
 export class CancelToken {
   private _cancelled = false;
-  cancel(): void { this._cancelled = true; }
-  get isCancelled(): boolean { return this._cancelled; }
+  cancel(): void {
+    this._cancelled = true;
+  }
+  get isCancelled(): boolean {
+    return this._cancelled;
+  }
 }
 
 /** Filter files to only TS/JS/JSX/TSX extensions */
@@ -46,10 +50,7 @@ export class LocalEslintRunner implements EslintRunner {
   private cwd: string;
   private timeoutMs: number;
 
-  constructor(
-    logger: Logger,
-    options?: { configFile?: string; cwd?: string; timeoutMs?: number },
-  ) {
+  constructor(logger: Logger, options?: { configFile?: string; cwd?: string; timeoutMs?: number }) {
     this.logger = logger.child({ service: 'EslintRunner' });
     this.configFile = options?.configFile;
     this.cwd = options?.cwd ?? process.cwd();
@@ -71,11 +72,7 @@ export class LocalEslintRunner implements EslintRunner {
       };
     }
 
-    const args = [
-      '--ext', '.ts,.tsx,.js,.jsx',
-      '--format', 'json',
-      ...applicable,
-    ];
+    const args = ['--ext', '.ts,.tsx,.js,.jsx', '--format', 'json', ...applicable];
 
     if (this.configFile) {
       args.splice(0, 0, '-c', this.configFile);
@@ -104,45 +101,73 @@ export class LocalEslintRunner implements EslintRunner {
         child.on('exit', () => clearInterval(checkCancel));
       }
 
-      const { stdout } = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-        let stdout = '';
-        let stderr = '';
-        child.stdout?.on('data', (d: Buffer) => { stdout += d.toString(); });
-        child.stderr?.on('data', (d: Buffer) => { stderr += d.toString(); });
-        child.on('close', (code) => {
-          if (code === 0 || code === 1) {
-            resolve({ stdout, stderr });
-          } else {
-            const err = new Error(`ESLint exited ${code ?? 'unknown'}`) as Error & { code?: number; stderr?: string };
-            err.code = code ?? undefined;
-            err.stderr = stderr;
-            reject(err);
-          }
-        });
-        child.on('error', reject);
-      });
+      const { stdout } = await new Promise<{ stdout: string; stderr: string }>(
+        (resolve, reject) => {
+          let stdout = '';
+          let stderr = '';
+          child.stdout?.on('data', (d: Buffer) => {
+            stdout += d.toString();
+          });
+          child.stderr?.on('data', (d: Buffer) => {
+            stderr += d.toString();
+          });
+          child.on('close', (code) => {
+            if (code === 0 || code === 1) {
+              resolve({ stdout, stderr });
+            } else {
+              const err = new Error(`ESLint exited ${code ?? 'unknown'}`) as Error & {
+                code?: number;
+                stderr?: string;
+              };
+              err.code = code ?? undefined;
+              err.stderr = stderr;
+              reject(err);
+            }
+          });
+          child.on('error', reject);
+        },
+      );
 
       return this.parseEslintOutput(stdout, applicable);
     } catch (err) {
-      const nodeErr = err as { code?: string | number; stdout?: string; stderr?: string; message: string };
+      const nodeErr = err as {
+        code?: string | number;
+        stdout?: string;
+        stderr?: string;
+        message: string;
+      };
       const timedOut = nodeErr.code === 'ETIMEDOUT' || nodeErr.message.includes('timed out');
       const cancelled = nodeErr.message.includes('SIGTERM');
 
       if (cancelled) {
         return {
-          ran: false, fixedFiles: [], failedFiles: applicable,
-          warnings: 0, errors: 0, findings: [], crashed: false,
+          ran: false,
+          fixedFiles: [],
+          failedFiles: applicable,
+          warnings: 0,
+          errors: 0,
+          findings: [],
+          crashed: false,
         };
       }
 
-      if (nodeErr.code === 2 || nodeErr.code === 'ERR_CHILD_PROCESS_FAILED' || (nodeErr.stderr && nodeErr.stderr.includes('ESLint'))) {
+      if (
+        nodeErr.code === 2 ||
+        nodeErr.code === 'ERR_CHILD_PROCESS_FAILED' ||
+        (nodeErr.stderr && nodeErr.stderr.includes('ESLint'))
+      ) {
         this.logger.error('eslint.crashed', {
           code: nodeErr.code,
           stderr: nodeErr.stderr?.slice(0, 500),
         });
         return {
-          ran: false, fixedFiles: [], failedFiles: applicable,
-          warnings: 0, errors: 0, findings: [], crashed: true,
+          ran: false,
+          fixedFiles: [],
+          failedFiles: applicable,
+          warnings: 0,
+          errors: 0,
+          findings: [],
+          crashed: true,
           crashMessage: nodeErr.stderr?.slice(0, 500),
         };
       }
@@ -154,8 +179,13 @@ export class LocalEslintRunner implements EslintRunner {
 
       this.logger.error('eslint.execution.error', { timedOut, error: nodeErr.message });
       return {
-        ran: false, fixedFiles: [], failedFiles: applicable,
-        warnings: 0, errors: 0, findings: [], crashed: true,
+        ran: false,
+        fixedFiles: [],
+        failedFiles: applicable,
+        warnings: 0,
+        errors: 0,
+        findings: [],
+        crashed: true,
         crashMessage: nodeErr.message,
       };
     }
@@ -165,7 +195,13 @@ export class LocalEslintRunner implements EslintRunner {
     try {
       const results = JSON.parse(output) as Array<{
         filePath: string;
-        messages: Array<{ ruleId: string | null; severity: number; message: string; line: number; column: number }>;
+        messages: Array<{
+          ruleId: string | null;
+          severity: number;
+          message: string;
+          line: number;
+          column: number;
+        }>;
         errorCount: number;
         warningCount: number;
         fixed: boolean;
@@ -195,9 +231,25 @@ export class LocalEslintRunner implements EslintRunner {
         }
       }
 
-      return { ran: true, fixedFiles, failedFiles, warnings: totalWarnings, errors: totalErrors, findings, crashed: false };
+      return {
+        ran: true,
+        fixedFiles,
+        failedFiles,
+        warnings: totalWarnings,
+        errors: totalErrors,
+        findings,
+        crashed: false,
+      };
     } catch {
-      return { ran: true, fixedFiles: [], failedFiles: files, warnings: 0, errors: 0, findings: [], crashed: false };
+      return {
+        ran: true,
+        fixedFiles: [],
+        failedFiles: files,
+        warnings: 0,
+        errors: 0,
+        findings: [],
+        crashed: false,
+      };
     }
   }
 }

@@ -57,7 +57,10 @@ export class SummaryCondenser {
     void _logger;
   }
 
-  condenseTo200(run: AutomationRun, gitNexusContext?: GitNexusContextSummary): CondensedAgentSummary {
+  condenseTo200(
+    run: AutomationRun,
+    gitNexusContext?: GitNexusContextSummary,
+  ): CondensedAgentSummary {
     const blockers = this.extractBlockerSummaries(run.results);
     const warnings = this.extractWarningSummaries(run.results);
     const nextActions = this.buildNextActions(run.results, blockers);
@@ -74,7 +77,10 @@ export class SummaryCondenser {
     };
   }
 
-  condenseTo300(run: AutomationRun, gitNexusContext?: GitNexusContextSummary): CondensedAgentSummary {
+  condenseTo300(
+    run: AutomationRun,
+    gitNexusContext?: GitNexusContextSummary,
+  ): CondensedAgentSummary {
     const blockers = this.extractBlockerSummaries(run.results);
     const warnings = this.extractWarningSummaries(run.results);
     const nextActions = this.buildNextActions(run.results, blockers);

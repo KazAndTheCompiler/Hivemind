@@ -27,7 +27,11 @@ export class AgentRouter {
   // Subscribe to worker emissions and route to main agent inbox
   startListening(): Subscription {
     return this.eventBus.on('agent.summary.emitted', async (event) => {
-      const summaryEvent = event as { kind: 'agent.summary.emitted'; raw: RawAgentSummary; timestamp: string };
+      const summaryEvent = event as {
+        kind: 'agent.summary.emitted';
+        raw: RawAgentSummary;
+        timestamp: string;
+      };
 
       const message: InboxMessage = {
         id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,

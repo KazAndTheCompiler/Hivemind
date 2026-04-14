@@ -2,15 +2,17 @@
 // This package defines ALL interfaces, enums, and type aliases used across the system.
 
 // ---------------------------------------------------------------------------
+// Schema Versioning
+// ---------------------------------------------------------------------------
+
+export const SCHEMA_VERSION = 'v1' as const;
+export type SchemaVersion = typeof SCHEMA_VERSION;
+
+// ---------------------------------------------------------------------------
 // Agent Status
 // ---------------------------------------------------------------------------
 
-export type AgentStatus =
-  | 'working'
-  | 'blocked'
-  | 'done'
-  | 'failed'
-  | 'needs_review';
+export type AgentStatus = 'working' | 'blocked' | 'done' | 'failed' | 'needs_review';
 
 // ---------------------------------------------------------------------------
 // Severity levels
@@ -104,6 +106,9 @@ export interface CondensedRelay300 {
 
 export interface FileChangeEvent {
   kind: 'file.change.detected';
+  schemaVersion: SchemaVersion;
+  sequence: number;
+  streamId: string;
   files: string[];
   packageNames: string[];
   timestamp: string;
@@ -111,18 +116,27 @@ export interface FileChangeEvent {
 
 export interface AgentSummaryEvent {
   kind: 'agent.summary.emitted';
+  schemaVersion: SchemaVersion;
+  sequence: number;
+  streamId: string;
   raw: RawAgentSummary;
   timestamp: string;
 }
 
 export interface AgentNormalizedEvent {
   kind: 'agent.summary.normalized';
+  schemaVersion: SchemaVersion;
+  sequence: number;
+  streamId: string;
   normalized: NormalizedAgentSummary;
   timestamp: string;
 }
 
 export interface CondensedRelayEvent {
   kind: 'relay.condensed';
+  schemaVersion: SchemaVersion;
+  sequence: number;
+  streamId: string;
   relay200: CondensedRelay200;
   relay300: CondensedRelay300;
   timestamp: string;
@@ -130,6 +144,9 @@ export interface CondensedRelayEvent {
 
 export interface QualityGateResult {
   kind: 'quality.gate.completed';
+  schemaVersion: SchemaVersion;
+  sequence: number;
+  streamId: string;
   changedFiles: string[];
   prettier: {
     ran: boolean;
@@ -149,12 +166,18 @@ export interface QualityGateResult {
 
 export interface SecDevFindingEvent {
   kind: 'secdev.finding';
+  schemaVersion: SchemaVersion;
+  sequence: number;
+  streamId: string;
   finding: ToolFinding;
   timestamp: string;
 }
 
 export interface GitNexusChangeEvent {
   kind: 'gitnexus.change';
+  schemaVersion: SchemaVersion;
+  sequence: number;
+  streamId: string;
   files: string[];
   packageNames: string[];
   diff: { added: number; removed: number; modified: number };
@@ -163,6 +186,9 @@ export interface GitNexusChangeEvent {
 
 export interface AuditPersistEvent {
   kind: 'audit.persisted';
+  schemaVersion: SchemaVersion;
+  sequence: number;
+  streamId: string;
   eventType: string;
   recordId: string;
   timestamp: string;
@@ -170,6 +196,9 @@ export interface AuditPersistEvent {
 
 export interface DeadLetterEvent {
   kind: 'audit.dead_letter';
+  schemaVersion: SchemaVersion;
+  sequence: number;
+  streamId: string;
   originalEvent: OpenClawEvent;
   reason: string;
   timestamp: string;
@@ -177,17 +206,26 @@ export interface DeadLetterEvent {
 
 export interface OrchestratorStartEvent {
   kind: 'orchestrator.started';
+  schemaVersion: SchemaVersion;
+  sequence: number;
+  streamId: string;
   timestamp: string;
 }
 
 export interface OrchestratorShutdownEvent {
   kind: 'orchestrator.shutdown';
+  schemaVersion: SchemaVersion;
+  sequence: number;
+  streamId: string;
   reason: string;
   timestamp: string;
 }
 
 export interface WorkerEmitEvent {
   kind: 'worker.emit';
+  schemaVersion: SchemaVersion;
+  sequence: number;
+  streamId: string;
   workerId: string;
   summary: RawAgentSummary;
   timestamp: string;
@@ -195,6 +233,9 @@ export interface WorkerEmitEvent {
 
 export interface RelayDeliveredEvent {
   kind: 'relay.delivered';
+  schemaVersion: SchemaVersion;
+  sequence: number;
+  streamId: string;
   taskId: string;
   severity: Severity;
   inboxSize: number;
@@ -203,6 +244,9 @@ export interface RelayDeliveredEvent {
 
 export interface RelayDeliveryFailedEvent {
   kind: 'relay.delivery_failed';
+  schemaVersion: SchemaVersion;
+  sequence: number;
+  streamId: string;
   taskId: string;
   reason: string;
   timestamp: string;
@@ -210,6 +254,9 @@ export interface RelayDeliveryFailedEvent {
 
 export interface GitNexusChangeDetectedEvent {
   kind: 'gitnexus.change.detected';
+  schemaVersion: SchemaVersion;
+  sequence: number;
+  streamId: string;
   files: string[];
   packageNames: string[];
   diff: { added: number; removed: number; modified: number };
@@ -247,6 +294,9 @@ export interface EventMeta {
   createdAt: string;
   processedAt?: string;
   failedHandlers?: number;
+  sequence?: number;
+  streamId?: string;
+  schemaVersion?: SchemaVersion;
 }
 
 // ---------------------------------------------------------------------------
@@ -350,4 +400,133 @@ export interface WorkerState {
   status: 'idle' | 'working' | 'blocked' | 'error';
   currentTask?: string;
   lastEmissionAt?: string;
+}
+
+// ---------------------------------------------------------------------------
+// System State (deterministic snapshot for replay)
+// ---------------------------------------------------------------------------
+
+export interface TaskState {
+  taskId: string;
+  status: AgentStatus;
+  confidence: number;
+  severity: Severity;
+  processedAt: string;
+  relayDelivered: boolean;
+  relayBlocked: boolean;
+  blockerReason?: string;
+}
+
+export interface SystemState {
+  schemaVersion: SchemaVersion;
+  tasks: Record<string, TaskState>;
+  streams: Record<string, StreamState>;
+  lastUpdated: string;
+  globalSequence: number;
+}
+
+export interface StreamState {
+  streamId: string;
+  lastSequence: number;
+  taskIds: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Event Sequencing (for ordering guarantees)
+// ---------------------------------------------------------------------------
+
+export interface SequencedEvent {
+  sequence: number;
+  streamId: string;
+}
+
+export type DomainEvent =
+  | { type: 'task.started'; taskId: string; timestamp: string }
+  | { type: 'task.completed'; taskId: string; timestamp: string }
+  | { type: 'task.failed'; taskId: string; reason: string; timestamp: string }
+  | { type: 'relay.blocked'; taskId: string; reason: string; timestamp: string }
+  | { type: 'relay.released'; taskId: string; timestamp: string };
+
+// ---------------------------------------------------------------------------
+// Idempotency (deduplication via eventId hash)
+// ---------------------------------------------------------------------------
+
+export interface IdempotencyRecord {
+  eventId: string;
+  processedAt: string;
+  result: 'processed' | 'skipped' | 'error';
+}
+
+// ---------------------------------------------------------------------------
+// Pipeline Outcome (partial failure strategy)
+// ---------------------------------------------------------------------------
+
+export type PipelineOutcome = 'success' | 'partial' | 'failed';
+
+export interface PipelineResult {
+  outcome: PipelineOutcome;
+  taskId: string;
+  steps: PipelineStepResult[];
+  timestamp: string;
+}
+
+export interface PipelineStepResult {
+  step: string;
+  success: boolean;
+  error?: string;
+  durationMs: number;
+}
+
+// ---------------------------------------------------------------------------
+// Confidence Threshold Routing
+// ---------------------------------------------------------------------------
+
+export const DEFAULT_CONFIDENCE_THRESHOLD = 0.5;
+
+export type RelayRoutingDecision =
+  | { decision: 'relay'; confidence: number }
+  | { decision: 'review_queue'; confidence: number; reason: string }
+  | { decision: 'block'; confidence: number; reason: string };
+
+// ---------------------------------------------------------------------------
+// Observability Metrics
+// ---------------------------------------------------------------------------
+
+export interface SystemMetrics {
+  eventsProcessedTotal: number;
+  eventsFailedTotal: number;
+  toolRunsTotal: number;
+  toolRunsFailed: number;
+  relayEmittedTotal: number;
+  relayBlockedTotal: number;
+  pipelineLockConflicts: number;
+  idempotencySkippedTotal: number;
+  lastMetricsUpdated: string;
+}
+
+// ---------------------------------------------------------------------------
+// Pipeline Ownership Lock
+// ---------------------------------------------------------------------------
+
+export interface PipelineLock {
+  owner: 'daemon' | 'orchestrator' | 'replay' | null;
+  lockedAt: string | null;
+  taskId?: string;
+}
+
+export const NO_LOCK: PipelineLock = {
+  owner: null,
+  lockedAt: null,
+};
+
+// ---------------------------------------------------------------------------
+// Agent Reputation
+// ---------------------------------------------------------------------------
+
+export interface AgentReputation {
+  agentId: string;
+  successRate: number;
+  totalRuns: number;
+  lastRunAt: string;
+  trustScore: number;
 }

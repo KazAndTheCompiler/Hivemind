@@ -4,14 +4,13 @@ import type {
   RawAgentSummary,
   NormalizedAgentSummary,
   ToolFinding,
+  SchemaVersion,
 } from '@openclaw/core-types';
 import { EventBus } from '@openclaw/core-events';
 import { Logger } from '@openclaw/core-logging';
 import { validateRawSummary, validateNormalizedSummary } from '@openclaw/agent-protocol';
 
-// ---------------------------------------------------------------------------
-// AgentSummaryIngestService — captures raw emissions, validates, persists
-// ---------------------------------------------------------------------------
+const DEFAULT_SCHEMA_VERSION: SchemaVersion = 'v1';
 
 export class AgentSummaryIngestService {
   private eventBus: EventBus;
@@ -32,6 +31,9 @@ export class AgentSummaryIngestService {
 
     await this.eventBus.emit({
       kind: 'agent.summary.emitted',
+      schemaVersion: DEFAULT_SCHEMA_VERSION,
+      sequence: 0,
+      streamId: validated.taskId,
       raw: validated,
       timestamp: new Date().toISOString(),
     });
@@ -39,10 +41,6 @@ export class AgentSummaryIngestService {
     return validated;
   }
 }
-
-// ---------------------------------------------------------------------------
-// SummaryNormalizationService — raw → normalized with tags and findings
-// ---------------------------------------------------------------------------
 
 export class SummaryNormalizationService {
   private eventBus: EventBus;
@@ -81,11 +79,17 @@ export class SummaryNormalizationService {
     return validated;
   }
 
-  async normalizeAndEmit(raw: RawAgentSummary, findings?: ToolFinding[]): Promise<NormalizedAgentSummary> {
+  async normalizeAndEmit(
+    raw: RawAgentSummary,
+    findings?: ToolFinding[],
+  ): Promise<NormalizedAgentSummary> {
     const normalized = this.normalize(raw, findings);
 
     await this.eventBus.emit({
       kind: 'agent.summary.normalized',
+      schemaVersion: DEFAULT_SCHEMA_VERSION,
+      sequence: 0,
+      streamId: raw.taskId,
       normalized,
       timestamp: new Date().toISOString(),
     });

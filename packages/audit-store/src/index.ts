@@ -3,7 +3,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import type { OpenClawEvent } from '@openclaw/core-types';
+import type { OpenClawEvent, SystemState } from '@openclaw/core-types';
 import { Logger } from '@openclaw/core-logging';
 import { AuditStoreError } from '@openclaw/core-errors';
 
@@ -18,6 +18,19 @@ export interface DeadLetterRecord {
   event: unknown;
   reason: string;
   capturedAt: string;
+}
+
+export interface AuditReplayOptions {
+  fromSequence?: number;
+  toSequence?: number;
+  streamId?: string;
+}
+
+export interface ReplayCheckpoint {
+  sequence: number;
+  streamId: string;
+  state: SystemState;
+  timestamp: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -41,7 +54,11 @@ export interface JsonlWriteResult {
 export class JsonlAppendOnlyLog {
   private filePath: string;
   private logger: Logger;
-  private writeQueue: Array<{ data: unknown; resolve: (r: JsonlWriteResult) => void; reject: (e: Error) => void }> = [];
+  private writeQueue: Array<{
+    data: unknown;
+    resolve: (r: JsonlWriteResult) => void;
+    reject: (e: Error) => void;
+  }> = [];
   private flushing = false;
 
   constructor(filePath: string, logger: Logger) {
@@ -66,13 +83,15 @@ export class JsonlAppendOnlyLog {
     if (!fs.existsSync(this.filePath)) return [];
     const content = await fs.promises.readFile(this.filePath, 'utf-8');
     const lines = content.trim().split('\n').filter(Boolean);
-    return lines.map((line) => {
-      try {
-        return JSON.parse(line);
-      } catch {
-        return null; // Skip corrupted lines
-      }
-    }).filter(Boolean);
+    return lines
+      .map((line) => {
+        try {
+          return JSON.parse(line);
+        } catch {
+          return null; // Skip corrupted lines
+        }
+      })
+      .filter(Boolean);
   }
 
   /** Read last N lines from the log file */
@@ -81,13 +100,32 @@ export class JsonlAppendOnlyLog {
     const content = await fs.promises.readFile(this.filePath, 'utf-8');
     const lines = content.trim().split('\n').filter(Boolean);
     const last = lines.slice(-n);
-    return last.map((line) => {
-      try {
-        return JSON.parse(line);
-      } catch {
-        return null;
-      }
-    }).filter(Boolean);
+    return last
+      .map((line) => {
+        try {
+          return JSON.parse(line);
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean);
+  }
+
+  /** Read a range of lines from the log file */
+  async readRange(startLine: number, endLine: number): Promise<unknown[]> {
+    if (!fs.existsSync(this.filePath)) return [];
+    const content = await fs.promises.readFile(this.filePath, 'utf-8');
+    const lines = content.trim().split('\n').filter(Boolean);
+    const range = lines.slice(startLine, endLine);
+    return range
+      .map((line) => {
+        try {
+          return JSON.parse(line);
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean);
   }
 
   /** Get the file size in bytes */
@@ -140,7 +178,9 @@ export class JsonlAppendOnlyLog {
     if (this.writeQueue.length >= 50) {
       this.flush().catch(() => {});
     } else {
-      setTimeout(() => { this.flush().catch(() => {}); }, 100);
+      setTimeout(() => {
+        this.flush().catch(() => {});
+      }, 100);
     }
   }
 }
@@ -179,6 +219,7 @@ export class DurableFileAuditStore {
   private auditLog: JsonlAppendOnlyLog;
   private relayLog: JsonlAppendOnlyLog;
   private qualityLog: JsonlAppendOnlyLog;
+  private stateLog: JsonlAppendOnlyLog;
 
   constructor(storePath: string, deadLetterPath: string, logger: Logger) {
     this.storePath = storePath;
@@ -195,13 +236,18 @@ export class DurableFileAuditStore {
         deadLetterPath: this.deadLetterPath,
         error: err instanceof Error ? err.message : String(err),
       });
-      throw new AuditStoreError('Failed to create audit store directories', {}, err instanceof Error ? err : undefined);
+      throw new AuditStoreError(
+        'Failed to create audit store directories',
+        {},
+        err instanceof Error ? err : undefined,
+      );
     }
 
     // Initialize JSONL append-only logs
     this.auditLog = new JsonlAppendOnlyLog(path.join(storePath, 'audit.jsonl'), logger);
     this.relayLog = new JsonlAppendOnlyLog(path.join(storePath, 'relay.jsonl'), logger);
     this.qualityLog = new JsonlAppendOnlyLog(path.join(storePath, 'quality.jsonl'), logger);
+    this.stateLog = new JsonlAppendOnlyLog(path.join(storePath, 'state.jsonl'), logger);
   }
 
   /**
@@ -220,7 +266,11 @@ export class DurableFileAuditStore {
     await this.auditLog.append(record);
 
     // Route to specific JSONL log
-    if (event.kind === 'relay.condensed' || event.kind === 'relay.delivered' || event.kind === 'relay.delivery_failed') {
+    if (
+      event.kind === 'relay.condensed' ||
+      event.kind === 'relay.delivered' ||
+      event.kind === 'relay.delivery_failed'
+    ) {
       await this.relayLog.append(record);
     }
     if (event.kind === 'quality.gate.completed') {
@@ -255,11 +305,16 @@ export class DurableFileAuditStore {
     });
   }
 
+  async persistCheckpoint(checkpoint: ReplayCheckpoint): Promise<void> {
+    await this.stateLog.append(checkpoint);
+  }
+
   async flush(): Promise<void> {
     // Flush JSONL logs
     await this.auditLog.flush();
     await this.relayLog.flush();
     await this.qualityLog.flush();
+    await this.stateLog.flush();
 
     // Flush file-per-event queue
     if (this.writeQueue.length === 0) return;
@@ -319,12 +374,132 @@ export class DurableFileAuditStore {
     return records.map((r) => r.event);
   }
 
+  async replayWithOptions(options?: AuditReplayOptions): Promise<OpenClawEvent[]> {
+    const records = await this.listRecords();
+    const events = records
+      .map((r) => r.event)
+      .filter((e) => {
+        const seq = (e as { sequence?: number }).sequence ?? 0;
+        const streamId = (e as { streamId?: string }).streamId ?? 'default';
+        if (options?.fromSequence && seq < options.fromSequence) return false;
+        if (options?.toSequence && seq > options.toSequence) return false;
+        if (options?.streamId && streamId !== options.streamId) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        const seqA = (a as { sequence?: number }).sequence ?? 0;
+        const seqB = (b as { sequence?: number }).sequence ?? 0;
+        return seqA - seqB;
+      });
+
+    return events;
+  }
+
+  async replayWithState(
+    options?: AuditReplayOptions,
+  ): Promise<{ events: OpenClawEvent[]; finalState: SystemState }> {
+    const events = await this.replayWithOptions(options);
+    const initialState: SystemState = {
+      schemaVersion: 'v1',
+      tasks: {},
+      streams: {},
+      lastUpdated: new Date().toISOString(),
+      globalSequence: 0,
+    };
+
+    const reducer = (state: SystemState, event: OpenClawEvent): SystemState => {
+      const seq = (event as { sequence?: number }).sequence ?? state.globalSequence + 1;
+      const streamId = (event as { streamId?: string }).streamId ?? 'default';
+
+      if (event.kind === 'agent.summary.emitted') {
+        const taskId = (event as { raw?: { taskId?: string } }).raw?.taskId ?? `task_${seq}`;
+        return {
+          ...state,
+          tasks: {
+            ...state.tasks,
+            [taskId]: {
+              taskId,
+              status: 'working',
+              confidence: 1.0,
+              severity: 'none',
+              processedAt: event.timestamp,
+              relayDelivered: false,
+              relayBlocked: false,
+            },
+          },
+          streams: {
+            ...state.streams,
+            [streamId]: {
+              streamId,
+              lastSequence: seq,
+              taskIds: [...(state.streams[streamId]?.taskIds ?? []), taskId],
+            },
+          },
+          lastUpdated: event.timestamp,
+          globalSequence: seq,
+        };
+      }
+
+      if (event.kind === 'relay.delivered') {
+        const taskId = (event as { taskId?: string }).taskId ?? '';
+        const existing = state.tasks[taskId];
+        if (existing) {
+          return {
+            ...state,
+            tasks: {
+              ...state.tasks,
+              [taskId]: { ...existing, relayDelivered: true, processedAt: event.timestamp },
+            },
+            globalSequence: seq,
+          };
+        }
+      }
+
+      if (event.kind === 'relay.delivery_failed') {
+        const taskId = (event as { taskId?: string }).taskId ?? '';
+        const existing = state.tasks[taskId];
+        if (existing) {
+          const reason = (event as { reason?: string }).reason ?? 'unknown';
+          return {
+            ...state,
+            tasks: {
+              ...state.tasks,
+              [taskId]: {
+                ...existing,
+                relayBlocked: true,
+                blockerReason: reason,
+                processedAt: event.timestamp,
+              },
+            },
+            globalSequence: seq,
+          };
+        }
+      }
+
+      return { ...state, globalSequence: seq };
+    };
+
+    let state = initialState;
+    for (const event of events) {
+      state = reducer(state, event);
+    }
+
+    return { events, finalState: state };
+  }
+
+  async getLastCheckpoint(): Promise<ReplayCheckpoint | null> {
+    const lines = await this.stateLog.readLast(1);
+    if (lines.length === 0) return null;
+    return lines[0] as ReplayCheckpoint;
+  }
+
   /** Get JSONL log references for debugging */
-  get logPaths(): { audit: string; relay: string; quality: string } {
+  get logPaths(): { audit: string; relay: string; quality: string; state: string } {
     return {
       audit: this.auditLog['filePath'],
       relay: this.relayLog['filePath'],
       quality: this.qualityLog['filePath'],
+      state: this.stateLog['filePath'],
     };
   }
 
@@ -337,7 +512,9 @@ export class DurableFileAuditStore {
     if (this.writeQueue.length >= 50) {
       this.flush().catch(() => {});
     } else {
-      setTimeout(() => { this.flush().catch(() => {}); }, 100);
+      setTimeout(() => {
+        this.flush().catch(() => {});
+      }, 100);
     }
   }
 
@@ -376,7 +553,11 @@ export class AuditStore {
       fs.writeFileSync(path.join(this.storePath, `${id}.json`), JSON.stringify(record, null, 2));
       return record;
     } catch (err) {
-      throw new AuditStoreError('Failed to persist audit record', { id, kind: event.kind }, err instanceof Error ? err : undefined);
+      throw new AuditStoreError(
+        'Failed to persist audit record',
+        { id, kind: event.kind },
+        err instanceof Error ? err : undefined,
+      );
     }
   }
 
@@ -384,10 +565,17 @@ export class AuditStore {
     const id = `dl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const record: DeadLetterRecord = { id, event, reason, capturedAt: new Date().toISOString() };
     try {
-      fs.writeFileSync(path.join(this.deadLetterPath, `${id}.json`), JSON.stringify(record, null, 2));
+      fs.writeFileSync(
+        path.join(this.deadLetterPath, `${id}.json`),
+        JSON.stringify(record, null, 2),
+      );
       return record;
     } catch (err) {
-      throw new AuditStoreError('Failed to persist dead letter record', { id, reason }, err instanceof Error ? err : undefined);
+      throw new AuditStoreError(
+        'Failed to persist dead letter record',
+        { id, reason },
+        err instanceof Error ? err : undefined,
+      );
     }
   }
 
@@ -406,7 +594,9 @@ export class AuditStore {
       const files = fs.readdirSync(this.storePath).filter((f) => f.endsWith('.json'));
       const records: AuditRecord[] = [];
       for (const file of files) {
-        const record = JSON.parse(fs.readFileSync(path.join(this.storePath, file), 'utf-8')) as AuditRecord;
+        const record = JSON.parse(
+          fs.readFileSync(path.join(this.storePath, file), 'utf-8'),
+        ) as AuditRecord;
         if (kind && record.event.kind !== kind) continue;
         records.push(record);
       }

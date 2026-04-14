@@ -16,7 +16,13 @@ export type ToolName = z.infer<typeof ToolNameSchema>;
 export const EnforcementSeveritySchema = z.enum(['info', 'warning', 'blocker']);
 export type EnforcementSeverity = z.infer<typeof EnforcementSeveritySchema>;
 
-export const EnforcementStatusSchema = z.enum(['passed', 'failed', 'partial', 'skipped', 'timed_out']);
+export const EnforcementStatusSchema = z.enum([
+  'passed',
+  'failed',
+  'partial',
+  'skipped',
+  'timed_out',
+]);
 export type EnforcementStatus = z.infer<typeof EnforcementStatusSchema>;
 
 export const RepoStateSchema = z.enum(['stable', 'repairing', 'drifting']);
@@ -261,8 +267,14 @@ export type AutomationRun = z.infer<typeof AutomationRunSchema>;
 // ============================================
 
 export interface SummaryCondenser {
-  condenseTo200(run: AutomationRun, gitNexusContext?: GitNexusContextSummary): CondensedAgentSummary;
-  condenseTo300(run: AutomationRun, gitNexusContext?: GitNexusContextSummary): CondensedAgentSummary;
+  condenseTo200(
+    run: AutomationRun,
+    gitNexusContext?: GitNexusContextSummary,
+  ): CondensedAgentSummary;
+  condenseTo300(
+    run: AutomationRun,
+    gitNexusContext?: GitNexusContextSummary,
+  ): CondensedAgentSummary;
   buildRepairInstructions(run: AutomationRun): string[];
 }
 

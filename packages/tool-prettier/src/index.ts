@@ -24,9 +24,17 @@ export interface PrettierRunner {
 }
 
 const PRETTIER_SUPPORTED_EXTS = [
-  '.ts', '.tsx', '.js', '.jsx',
-  '.json', '.md', '.css', '.scss',
-  '.html', '.yaml', '.yml',
+  '.ts',
+  '.tsx',
+  '.js',
+  '.jsx',
+  '.json',
+  '.md',
+  '.css',
+  '.scss',
+  '.html',
+  '.yaml',
+  '.yml',
 ];
 
 /** Filter files to Prettier-supported extensions */
@@ -42,10 +50,7 @@ export class LocalPrettierRunner implements PrettierRunner {
   private cwd: string;
   private timeoutMs: number;
 
-  constructor(
-    logger: Logger,
-    options?: { cwd?: string; timeoutMs?: number },
-  ) {
+  constructor(logger: Logger, options?: { cwd?: string; timeoutMs?: number }) {
     this.logger = logger.child({ service: 'PrettierRunner' });
     this.cwd = options?.cwd ?? process.cwd();
     this.timeoutMs = options?.timeoutMs ?? 60_000;

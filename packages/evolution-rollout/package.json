@@ -1,0 +1,21 @@
+{
+  "name": "@openclaw/evolution-rollout",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Evolution layer rollout decision, execution, and rollback",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@openclaw/evolution-core": "workspace:*",
+    "@openclaw/evolution-candidate": "workspace:*",
+    "@openclaw/core-logging": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.1"
+  }
+}

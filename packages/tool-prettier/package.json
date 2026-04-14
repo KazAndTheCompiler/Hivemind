@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@openclaw/automation-core": "workspace:*",
     "@openclaw/core-types": "workspace:*",
     "@openclaw/core-events": "workspace:*",
     "@openclaw/core-logging": "workspace:*"

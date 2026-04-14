@@ -1,10 +1,7 @@
 // Agent-facing summary emission
 // Builds compact summaries for main agent handoff
 
-import type {
-  AutomationRun,
-  GitNexusContextSummary,
-} from '@openclaw/automation-core';
+import type { AutomationRun, GitNexusContextSummary } from '@openclaw/automation-core';
 
 export interface SummaryEmitterOptions {
   includeRaw?: boolean;
@@ -34,10 +31,7 @@ export class SummaryEmitter {
     return this.emitFailingSummary(run, blockers, warnings);
   }
 
-  emitCheckpointSummary(
-    run: AutomationRun,
-    gitNexusContext?: GitNexusContextSummary,
-  ): string {
+  emitCheckpointSummary(run: AutomationRun, gitNexusContext?: GitNexusContextSummary): string {
     const blockers = this.extractBlockers(run);
     const warnings = this.extractWarnings(run);
     const repoState = this.determineRepoState(run);

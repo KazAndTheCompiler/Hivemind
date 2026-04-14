@@ -156,7 +156,11 @@ export class OrchestratorService {
       ConfigService.validateStartup(this.config);
       checks.push({ name: 'config_valid', passed: true });
     } catch (err) {
-      checks.push({ name: 'config_valid', passed: false, detail: err instanceof Error ? err.message : String(err) });
+      checks.push({
+        name: 'config_valid',
+        passed: false,
+        detail: err instanceof Error ? err.message : String(err),
+      });
     }
 
     try {
@@ -164,12 +168,20 @@ export class OrchestratorService {
       fs.accessSync(this.config.audit.storePath, fs.constants.W_OK);
       checks.push({ name: 'audit_writeable', passed: true });
     } catch (err) {
-      checks.push({ name: 'audit_writeable', passed: false, detail: err instanceof Error ? err.message : String(err) });
+      checks.push({
+        name: 'audit_writeable',
+        passed: false,
+        detail: err instanceof Error ? err.message : String(err),
+      });
     }
 
     const workspacePath = this.config.workspace;
     if (workspacePath && workspacePath !== '.' && !fs.existsSync(workspacePath)) {
-      checks.push({ name: 'workspace_exists', passed: false, detail: `Workspace not found: ${workspacePath}` });
+      checks.push({
+        name: 'workspace_exists',
+        passed: false,
+        detail: `Workspace not found: ${workspacePath}`,
+      });
     } else {
       checks.push({ name: 'workspace_exists', passed: true });
     }
@@ -222,7 +234,13 @@ export class OrchestratorService {
 
       const qualityResult = await this.qualityService.runQualityGate(normalized.touchedFiles);
       normalized.toolFindings.push(...qualityResult.findings);
-      steps.push({ step: 'quality_gate', success: qualityResult.findings.filter(f => f.severity === 'critical' || f.severity === 'high').length === 0, durationMs: Date.now() - startTime });
+      steps.push({
+        step: 'quality_gate',
+        success:
+          qualityResult.findings.filter((f) => f.severity === 'critical' || f.severity === 'high')
+            .length === 0,
+        durationMs: Date.now() - startTime,
+      });
 
       const semanticGuardResult = this.runSemanticGuard(normalized);
       if (!semanticGuardResult.passed) {
@@ -255,21 +273,31 @@ export class OrchestratorService {
       }
 
       if (this.checkpointOrchestrator.shouldCheckpoint()) {
-        const checkpointSummary = this.summaryEmitter.emitCheckpointSummary({
-          id: `run_${Date.now()}`,
-          mode: 'checkpoint',
-          status: normalized.toolFindings.some(f => f.severity === 'critical' || f.severity === 'high') ? 'failed' : 'passed',
-          startedAt: new Date().toISOString(),
-          completedAt: new Date().toISOString(),
-          results: [],
-        } as any, {
-          touchedAreas: normalized.touchedFiles,
-          hotspots: [],
-          architecturalNotes: [],
-          suspectedRisks: [],
-          summary: normalized.conciseSummary,
+        const checkpointSummary = this.summaryEmitter.emitCheckpointSummary(
+          {
+            id: `run_${Date.now()}`,
+            mode: 'checkpoint',
+            status: normalized.toolFindings.some(
+              (f) => f.severity === 'critical' || f.severity === 'high',
+            )
+              ? 'failed'
+              : 'passed',
+            startedAt: new Date().toISOString(),
+            completedAt: new Date().toISOString(),
+            results: [],
+          } as any,
+          {
+            touchedAreas: normalized.touchedFiles,
+            hotspots: [],
+            architecturalNotes: [],
+            suspectedRisks: [],
+            summary: normalized.conciseSummary,
+          },
+        );
+        this.logger.info('orchestrator.checkpoint.triggered', {
+          taskId,
+          summary: checkpointSummary.slice(0, 200),
         });
-        this.logger.info('orchestrator.checkpoint.triggered', { taskId, summary: checkpointSummary.slice(0, 200) });
         await this.checkpointOrchestrator.executeCheckpoint();
       }
 
@@ -277,7 +305,11 @@ export class OrchestratorService {
       steps.push({ step: 'condense', success: true, durationMs: Date.now() - startTime });
 
       const delivery = await this.relayService.deliverAndEmit(relay200, relay300);
-      steps.push({ step: 'relay', success: delivery.delivered, durationMs: Date.now() - startTime });
+      steps.push({
+        step: 'relay',
+        success: delivery.delivered,
+        durationMs: Date.now() - startTime,
+      });
 
       if (relay200.severity === 'critical' || relay300.severity === 'critical') {
         this.pipelineHalted = true;
@@ -295,11 +327,15 @@ export class OrchestratorService {
         processedAt: new Date().toISOString(),
         relayDelivered: delivery.delivered,
         relayBlocked: delivery.routingDecision.decision === 'block',
-        blockerReason: delivery.routingDecision.decision === 'block' ? delivery.routingDecision.reason : undefined,
+        blockerReason:
+          delivery.routingDecision.decision === 'block'
+            ? delivery.routingDecision.reason
+            : undefined,
       });
 
       const failedSteps = steps.filter((s) => !s.success).length;
-      const outcome: PipelineOutcome = failedSteps === 0 ? 'success' : failedSteps === steps.length ? 'failed' : 'partial';
+      const outcome: PipelineOutcome =
+        failedSteps === 0 ? 'success' : failedSteps === steps.length ? 'failed' : 'partial';
 
       return {
         normalized,
@@ -455,7 +491,12 @@ export class OrchestratorService {
     const sanitized: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(metadata)) {
       if (/secret|password|token|key|credential/i.test(key)) continue;
-      if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || value === null) {
+      if (
+        typeof value === 'string' ||
+        typeof value === 'number' ||
+        typeof value === 'boolean' ||
+        value === null
+      ) {
         sanitized[key] = value;
       } else if (Array.isArray(value) && value.every((v) => typeof v === 'string')) {
         sanitized[key] = value.slice(0, 50);
@@ -465,12 +506,17 @@ export class OrchestratorService {
   }
 
   private applyConfidenceDecay(normalized: NormalizedAgentSummary): void {
-    const criticalFindings = normalized.toolFindings.filter((f) => f.severity === 'critical').length;
+    const criticalFindings = normalized.toolFindings.filter(
+      (f) => f.severity === 'critical',
+    ).length;
     const highFindings = normalized.toolFindings.filter((f) => f.severity === 'high').length;
     const hasBlockers = normalized.blockers.length > 0;
 
     if (criticalFindings > 0 || highFindings > 2) {
-      normalized.confidence = Math.max(0, normalized.confidence - 0.1 * criticalFindings - 0.05 * highFindings);
+      normalized.confidence = Math.max(
+        0,
+        normalized.confidence - 0.1 * criticalFindings - 0.05 * highFindings,
+      );
     }
 
     if (hasBlockers) {
@@ -481,11 +527,9 @@ export class OrchestratorService {
   private runSemanticGuard(normalized: NormalizedAgentSummary): SemanticGuardResult {
     const issues: string[] = [];
     const findings: ToolFinding[] = [];
-    const text = [
-      normalized.conciseSummary,
-      ...normalized.blockers,
-      ...normalized.nextActions,
-    ].join(' ').toLowerCase();
+    const text = [normalized.conciseSummary, ...normalized.blockers, ...normalized.nextActions]
+      .join(' ')
+      .toLowerCase();
 
     const emptyDone = normalized.conciseSummary.trim().length === 0;
     const hasBlockers = normalized.blockers.length > 0;
@@ -527,7 +571,13 @@ export class OrchestratorService {
       });
     }
 
-    const forbiddenPhrases = ['completed task', 'worked on', 'made changes', 'did stuff', 'something'];
+    const forbiddenPhrases = [
+      'completed task',
+      'worked on',
+      'made changes',
+      'did stuff',
+      'something',
+    ];
     for (const phrase of forbiddenPhrases) {
       if (text.includes(phrase)) {
         issues.push(`forbidden_phrase: ${phrase}`);
@@ -547,15 +597,22 @@ export class OrchestratorService {
 
   static computeQualityScore(gate: {
     prettier: { ran: boolean; formattedFiles: string[]; failedFiles: string[] };
-    eslint: { ran: boolean; fixedFiles: string[]; failedFiles: string[]; warnings: number; errors: number };
+    eslint: {
+      ran: boolean;
+      fixedFiles: string[];
+      failedFiles: string[];
+      warnings: number;
+      errors: number;
+    };
     findings: Array<{ severity: string }>;
   }): QualityScore {
-    const totalFiles = new Set([
-      ...gate.prettier.formattedFiles,
-      ...gate.prettier.failedFiles,
-      ...gate.eslint.fixedFiles,
-      ...gate.eslint.failedFiles,
-    ]).size || 1;
+    const totalFiles =
+      new Set([
+        ...gate.prettier.formattedFiles,
+        ...gate.prettier.failedFiles,
+        ...gate.eslint.fixedFiles,
+        ...gate.eslint.failedFiles,
+      ]).size || 1;
 
     const lint = gate.eslint.ran
       ? Math.round(((totalFiles - gate.eslint.failedFiles.length) / totalFiles) * 100)
@@ -563,7 +620,9 @@ export class OrchestratorService {
     const format = gate.prettier.ran
       ? Math.round(((totalFiles - gate.prettier.failedFiles.length) / totalFiles) * 100)
       : 100;
-    const securityIssues = gate.findings.filter((f) => f.severity === 'high' || f.severity === 'critical').length;
+    const securityIssues = gate.findings.filter(
+      (f) => f.severity === 'high' || f.severity === 'critical',
+    ).length;
     const security = Math.max(0, 100 - securityIssues * 20);
 
     return { lint, format, security, overall: Math.round((lint + format + security) / 3) };
@@ -623,7 +682,9 @@ export class OrchestratorService {
     }
 
     this.running = true;
-    this.logger.info('orchestrator.started', { maxWorkers: this.config.orchestrator.maxConcurrentWorkers });
+    this.logger.info('orchestrator.started', {
+      maxWorkers: this.config.orchestrator.maxConcurrentWorkers,
+    });
 
     await this.eventBus.emit({
       kind: 'orchestrator.started',
@@ -639,10 +700,12 @@ export class OrchestratorService {
     this.logger.info('orchestrator.shutdown.start', { reason });
 
     if (this.pendingOperations.size > 0) {
-      this.logger.info('orchestrator.shutdown.waiting', { pendingCount: this.pendingOperations.size });
+      this.logger.info('orchestrator.shutdown.waiting', {
+        pendingCount: this.pendingOperations.size,
+      });
       await Promise.allSettled(
-        Array.from(this.pendingOperations).map(
-          (p) => Promise.race([p, new Promise((r) => setTimeout(r, 1000))]),
+        Array.from(this.pendingOperations).map((p) =>
+          Promise.race([p, new Promise((r) => setTimeout(r, 1000))]),
         ),
       );
     }
@@ -685,9 +748,15 @@ export class OrchestratorService {
     this.eventBus.releaseLock(owner);
   }
 
-  get isRunning(): boolean { return this.running; }
-  get isHalted(): boolean { return this.pipelineHalted; }
-  get pipelineLock(): PipelineLock { return this.eventBus.getLock(); }
+  get isRunning(): boolean {
+    return this.running;
+  }
+  get isHalted(): boolean {
+    return this.pipelineHalted;
+  }
+  get pipelineLock(): PipelineLock {
+    return this.eventBus.getLock();
+  }
 
   get status() {
     return {

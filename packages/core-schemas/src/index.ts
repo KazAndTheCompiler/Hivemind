@@ -7,37 +7,13 @@ import { z } from 'zod';
 // Primitive schemas
 // ---------------------------------------------------------------------------
 
-export const AgentStatusSchema = z.enum([
-  'working',
-  'blocked',
-  'done',
-  'failed',
-  'needs_review',
-]);
+export const AgentStatusSchema = z.enum(['working', 'blocked', 'done', 'failed', 'needs_review']);
 
-export const SeveritySchema = z.enum([
-  'none',
-  'low',
-  'medium',
-  'high',
-  'critical',
-]);
+export const SeveritySchema = z.enum(['none', 'low', 'medium', 'high', 'critical']);
 
-export const ToolSeveritySchema = z.enum([
-  'info',
-  'low',
-  'medium',
-  'high',
-  'critical',
-]);
+export const ToolSeveritySchema = z.enum(['info', 'low', 'medium', 'high', 'critical']);
 
-export const ToolSourceSchema = z.enum([
-  'secdev',
-  'gitnexus',
-  'eslint',
-  'prettier',
-  'system',
-]);
+export const ToolSourceSchema = z.enum(['secdev', 'gitnexus', 'eslint', 'prettier', 'system']);
 
 // ---------------------------------------------------------------------------
 // Tool Finding
@@ -122,6 +98,9 @@ export const CondensedRelay300Schema = z.object({
 
 export const FileChangeEventSchema = z.object({
   kind: z.literal('file.change.detected'),
+  schemaVersion: z.literal('v1'),
+  sequence: z.number().int().nonnegative(),
+  streamId: z.string(),
   files: z.array(z.string()),
   packageNames: z.array(z.string()),
   timestamp: z.string(),
@@ -129,18 +108,27 @@ export const FileChangeEventSchema = z.object({
 
 export const AgentSummaryEventSchema = z.object({
   kind: z.literal('agent.summary.emitted'),
+  schemaVersion: z.literal('v1'),
+  sequence: z.number().int().nonnegative(),
+  streamId: z.string(),
   raw: RawAgentSummarySchema,
   timestamp: z.string(),
 });
 
 export const AgentNormalizedEventSchema = z.object({
   kind: z.literal('agent.summary.normalized'),
+  schemaVersion: z.literal('v1'),
+  sequence: z.number().int().nonnegative(),
+  streamId: z.string(),
   normalized: NormalizedAgentSummarySchema,
   timestamp: z.string(),
 });
 
 export const CondensedRelayEventSchema = z.object({
   kind: z.literal('relay.condensed'),
+  schemaVersion: z.literal('v1'),
+  sequence: z.number().int().nonnegative(),
+  streamId: z.string(),
   relay200: CondensedRelay200Schema,
   relay300: CondensedRelay300Schema,
   timestamp: z.string(),
@@ -148,6 +136,9 @@ export const CondensedRelayEventSchema = z.object({
 
 export const QualityGateResultSchema = z.object({
   kind: z.literal('quality.gate.completed'),
+  schemaVersion: z.literal('v1'),
+  sequence: z.number().int().nonnegative(),
+  streamId: z.string(),
   changedFiles: z.array(z.string()),
   prettier: z.object({
     ran: z.boolean(),
@@ -167,12 +158,18 @@ export const QualityGateResultSchema = z.object({
 
 export const SecDevFindingEventSchema = z.object({
   kind: z.literal('secdev.finding'),
+  schemaVersion: z.literal('v1'),
+  sequence: z.number().int().nonnegative(),
+  streamId: z.string(),
   finding: ToolFindingSchema,
   timestamp: z.string(),
 });
 
 export const GitNexusChangeEventSchema = z.object({
   kind: z.literal('gitnexus.change'),
+  schemaVersion: z.literal('v1'),
+  sequence: z.number().int().nonnegative(),
+  streamId: z.string(),
   files: z.array(z.string()),
   packageNames: z.array(z.string()),
   diff: z.object({
@@ -185,6 +182,9 @@ export const GitNexusChangeEventSchema = z.object({
 
 export const AuditPersistEventSchema = z.object({
   kind: z.literal('audit.persisted'),
+  schemaVersion: z.literal('v1'),
+  sequence: z.number().int().nonnegative(),
+  streamId: z.string(),
   eventType: z.string(),
   recordId: z.string(),
   timestamp: z.string(),
@@ -192,6 +192,9 @@ export const AuditPersistEventSchema = z.object({
 
 export const DeadLetterEventSchema = z.object({
   kind: z.literal('audit.dead_letter'),
+  schemaVersion: z.literal('v1'),
+  sequence: z.number().int().nonnegative(),
+  streamId: z.string(),
   originalEvent: z.unknown(),
   reason: z.string(),
   timestamp: z.string(),
@@ -199,17 +202,26 @@ export const DeadLetterEventSchema = z.object({
 
 export const OrchestratorStartEventSchema = z.object({
   kind: z.literal('orchestrator.started'),
+  schemaVersion: z.literal('v1'),
+  sequence: z.number().int().nonnegative(),
+  streamId: z.string(),
   timestamp: z.string(),
 });
 
 export const OrchestratorShutdownEventSchema = z.object({
   kind: z.literal('orchestrator.shutdown'),
+  schemaVersion: z.literal('v1'),
+  sequence: z.number().int().nonnegative(),
+  streamId: z.string(),
   reason: z.string(),
   timestamp: z.string(),
 });
 
 export const WorkerEmitEventSchema = z.object({
   kind: z.literal('worker.emit'),
+  schemaVersion: z.literal('v1'),
+  sequence: z.number().int().nonnegative(),
+  streamId: z.string(),
   workerId: z.string(),
   summary: RawAgentSummarySchema,
   timestamp: z.string(),
@@ -217,6 +229,9 @@ export const WorkerEmitEventSchema = z.object({
 
 export const RelayDeliveredEventSchema = z.object({
   kind: z.literal('relay.delivered'),
+  schemaVersion: z.literal('v1'),
+  sequence: z.number().int().nonnegative(),
+  streamId: z.string(),
   taskId: z.string(),
   severity: SeveritySchema,
   inboxSize: z.number(),
@@ -225,6 +240,9 @@ export const RelayDeliveredEventSchema = z.object({
 
 export const RelayDeliveryFailedEventSchema = z.object({
   kind: z.literal('relay.delivery_failed'),
+  schemaVersion: z.literal('v1'),
+  sequence: z.number().int().nonnegative(),
+  streamId: z.string(),
   taskId: z.string(),
   reason: z.string(),
   timestamp: z.string(),
@@ -232,6 +250,9 @@ export const RelayDeliveryFailedEventSchema = z.object({
 
 export const GitNexusChangeDetectedEventSchema = z.object({
   kind: z.literal('gitnexus.change.detected'),
+  schemaVersion: z.literal('v1'),
+  sequence: z.number().int().nonnegative(),
+  streamId: z.string(),
   files: z.array(z.string()),
   packageNames: z.array(z.string()),
   diff: z.object({
@@ -267,45 +288,63 @@ export const OpenClawEventSchema = z.discriminatedUnion('kind', [
 
 export const OpenClawConfigSchema = z.object({
   workspace: z.string().default('.'),
-  orchestrator: z.object({
-    maxConcurrentWorkers: z.number().int().positive().default(4),
-    relayBudget200: z.number().int().positive().default(200),
-    relayBudget300: z.number().int().positive().default(300),
-    retryAttempts: z.number().int().nonnegative().default(3),
-    retryDelayMs: z.number().int().positive().default(1000),
-  }).default({}),
-  daemon: z.object({
-    watchPaths: z.array(z.string()).default(['.']),
-    debounceMs: z.number().int().positive().default(500),
-  }).default({}),
-  tools: z.object({
-    gitnexus: z.object({
-      enabled: z.boolean().default(true),
-      command: z.string().optional(),
-    }).default({}),
-    secdev: z.object({
-      enabled: z.boolean().default(false),
-      command: z.string().optional(),
-    }).default({}),
-    eslint: z.object({
-      enabled: z.boolean().default(true),
-      configFile: z.string().optional(),
-    }).default({}),
-    prettier: z.object({
-      enabled: z.boolean().default(true),
-      configFile: z.string().optional(),
-    }).default({}),
-  }).default({}),
-  audit: z.object({
-    storePath: z.string().default('.openclaw/audit'),
-    retentionDays: z.number().int().positive().default(30),
-    deadLetterPath: z.string().default('.openclaw/dead-letter'),
-  }).default({}),
-  logging: z.object({
-    level: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
-    format: z.enum(['json', 'human']).default('json'),
-    output: z.string().optional(),
-  }).default({}),
+  orchestrator: z
+    .object({
+      maxConcurrentWorkers: z.number().int().positive().default(4),
+      relayBudget200: z.number().int().positive().default(200),
+      relayBudget300: z.number().int().positive().default(300),
+      retryAttempts: z.number().int().nonnegative().default(3),
+      retryDelayMs: z.number().int().positive().default(1000),
+    })
+    .default({}),
+  daemon: z
+    .object({
+      watchPaths: z.array(z.string()).default(['.']),
+      debounceMs: z.number().int().positive().default(500),
+    })
+    .default({}),
+  tools: z
+    .object({
+      gitnexus: z
+        .object({
+          enabled: z.boolean().default(true),
+          command: z.string().optional(),
+        })
+        .default({}),
+      secdev: z
+        .object({
+          enabled: z.boolean().default(false),
+          command: z.string().optional(),
+        })
+        .default({}),
+      eslint: z
+        .object({
+          enabled: z.boolean().default(true),
+          configFile: z.string().optional(),
+        })
+        .default({}),
+      prettier: z
+        .object({
+          enabled: z.boolean().default(true),
+          configFile: z.string().optional(),
+        })
+        .default({}),
+    })
+    .default({}),
+  audit: z
+    .object({
+      storePath: z.string().default('.openclaw/audit'),
+      retentionDays: z.number().int().positive().default(30),
+      deadLetterPath: z.string().default('.openclaw/dead-letter'),
+    })
+    .default({}),
+  logging: z
+    .object({
+      level: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
+      format: z.enum(['json', 'human']).default('json'),
+      output: z.string().optional(),
+    })
+    .default({}),
 });
 
 // ---------------------------------------------------------------------------

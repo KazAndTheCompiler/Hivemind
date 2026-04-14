@@ -103,7 +103,13 @@ function trimLowestPriorityField(payload: RelayPayload): RelayPayload {
 
   // Trim topFindings (remove lowest severity first)
   if (trimmed.topFindings && trimmed.topFindings.length > 0) {
-    const severityOrder: Record<string, number> = { info: 0, low: 1, medium: 2, high: 3, critical: 4 };
+    const severityOrder: Record<string, number> = {
+      info: 0,
+      low: 1,
+      medium: 2,
+      high: 3,
+      critical: 4,
+    };
     const sorted = [...trimmed.topFindings].sort(
       (a, b) => (severityOrder[a.severity] ?? -1) - (severityOrder[b.severity] ?? -1),
     );
@@ -145,7 +151,7 @@ export function enforceBudget<T extends RelayPayload>(payload: T, maxTokens: num
   const final = fitsBudget(current, maxTokens);
   throw new Error(
     `Relay budget violation: ${final.tokens} tokens > ${maxTokens} max. ` +
-    `Payload could not be trimmed within ${MAX_ITERATIONS} iterations.`,
+      `Payload could not be trimmed within ${MAX_ITERATIONS} iterations.`,
   );
 }
 
@@ -153,9 +159,6 @@ export function enforceBudget<T extends RelayPayload>(payload: T, maxTokens: num
  * Iteratively trims a relay payload until it fits within the token budget.
  * Legacy wrapper around enforceBudget for backward compatibility.
  */
-export function truncatePayloadToBudget<T extends RelayPayload>(
-  payload: T,
-  maxTokens: number,
-): T {
+export function truncatePayloadToBudget<T extends RelayPayload>(payload: T, maxTokens: number): T {
   return enforceBudget(payload, maxTokens);
 }

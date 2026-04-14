@@ -2,9 +2,7 @@
 // Evaluates tool results against policy rules to make proceed/repair decisions
 
 import { Logger } from '@openclaw/core-logging';
-import {
-  DEFAULT_ENFORCEMENT_POLICY,
-} from '@openclaw/automation-core';
+import { DEFAULT_ENFORCEMENT_POLICY } from '@openclaw/automation-core';
 import type {
   ToolExecutionResult,
   ToolName,

@@ -1,10 +1,7 @@
 // Checkpoint trigger orchestration
 // Manages checkpoint triggers based on mutation count, milestones, or manual command
 
-import type {
-  CheckpointTrigger,
-  AutomationRun,
-} from '@openclaw/automation-core';
+import type { CheckpointTrigger, AutomationRun } from '@openclaw/automation-core';
 
 export interface CheckpointState {
   mutationCount: number;
@@ -17,10 +14,7 @@ export class CheckpointTriggerManager {
   private triggers: CheckpointTrigger[];
   private milestoneCallbacks: Array<(label: string) => Promise<void>>;
 
-  constructor(
-    initialMutationCount = 0,
-    triggers?: CheckpointTrigger[],
-  ) {
+  constructor(initialMutationCount = 0, triggers?: CheckpointTrigger[]) {
     this.state = {
       mutationCount: initialMutationCount,
       lastCheckpointAt: null,

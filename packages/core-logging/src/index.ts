@@ -51,11 +51,21 @@ class PinoLoggerChild implements Logger {
     this.logger = logger;
   }
 
-  trace(msg: string, meta?: Record<string, unknown>): void { this.logger.trace(meta ?? {}, msg); }
-  debug(msg: string, meta?: Record<string, unknown>): void { this.logger.debug(meta ?? {}, msg); }
-  info(msg: string, meta?: Record<string, unknown>): void { this.logger.info(meta ?? {}, msg); }
-  warn(msg: string, meta?: Record<string, unknown>): void { this.logger.warn(meta ?? {}, msg); }
-  error(msg: string, meta?: Record<string, unknown>): void { this.logger.error(meta ?? {}, msg); }
+  trace(msg: string, meta?: Record<string, unknown>): void {
+    this.logger.trace(meta ?? {}, msg);
+  }
+  debug(msg: string, meta?: Record<string, unknown>): void {
+    this.logger.debug(meta ?? {}, msg);
+  }
+  info(msg: string, meta?: Record<string, unknown>): void {
+    this.logger.info(meta ?? {}, msg);
+  }
+  warn(msg: string, meta?: Record<string, unknown>): void {
+    this.logger.warn(meta ?? {}, msg);
+  }
+  error(msg: string, meta?: Record<string, unknown>): void {
+    this.logger.error(meta ?? {}, msg);
+  }
   child(bindings: Record<string, unknown>): Logger {
     return new PinoLoggerChild(this.logger.child(bindings));
   }

@@ -1,10 +1,7 @@
 // File change detection and quality gate service
 // Runs Prettier, ESLint, and SecDev on changed files
 
-import type {
-  QualityGateResult,
-  ToolFinding,
-} from '@openclaw/core-types';
+import type { QualityGateResult, ToolFinding } from '@openclaw/core-types';
 import { EventBus } from '@openclaw/core-events';
 import { Logger } from '@openclaw/core-logging';
 import type { EslintRunner, EslintRunResult } from '@openclaw/tool-eslint';
@@ -36,9 +33,7 @@ export class ChangedFileQualityService {
     this.logger.info('quality.gate.start', { fileCount: files.length });
 
     const tsFiles = files.filter((f) => /\.(ts|tsx|js|jsx)$/.test(f));
-    const supportedFiles = files.filter((f) =>
-      /\.(ts|tsx|js|jsx|json|md|css|scss|html)$/.test(f),
-    );
+    const supportedFiles = files.filter((f) => /\.(ts|tsx|js|jsx|json|md|css|scss|html)$/.test(f));
 
     // Run prettier on supported files
     const prettierResult = await this.prettierRunner.run(supportedFiles);
@@ -47,10 +42,7 @@ export class ChangedFileQualityService {
     const eslintResult = await this.eslintRunner.run(tsFiles);
 
     // Collect findings from all tools
-    const findings: ToolFinding[] = [
-      ...eslintResult.findings,
-      ...prettierResult.findings,
-    ];
+    const findings: ToolFinding[] = [...eslintResult.findings, ...prettierResult.findings];
 
     // Check for security-relevant changes via SecDev
     const secdevFindings = await this.secdevAdapter.analyzeFiles(files);
@@ -58,6 +50,9 @@ export class ChangedFileQualityService {
 
     const result: QualityGateResult = {
       kind: 'quality.gate.completed',
+      schemaVersion: 'v1',
+      sequence: 0,
+      streamId: files.join(','),
       changedFiles: files,
       prettier: {
         ran: prettierResult.ran,

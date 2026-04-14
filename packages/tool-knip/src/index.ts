@@ -76,11 +76,16 @@ export class KnipAdapter implements ToolAdapter {
     } catch (err) {
       const nodeErr = err as { code?: string | number; message: string; stderr?: string };
       const code = nodeErr.code;
-      const isTimedOut = code === 'ETIMEDOUT' || code === 'ETIME' || nodeErr.message.includes('timed out');
+      const isTimedOut =
+        code === 'ETIMEDOUT' || code === 'ETIME' || nodeErr.message.includes('timed out');
       if (isTimedOut) {
         return { stdout: '', stderr: 'knip timed out', exitCode: null };
       }
-      return { stdout: '', stderr: nodeErr.stderr ?? nodeErr.message, exitCode: typeof code === 'number' ? code : null };
+      return {
+        stdout: '',
+        stderr: nodeErr.stderr ?? nodeErr.message,
+        exitCode: typeof code === 'number' ? code : null,
+      };
     }
   }
 

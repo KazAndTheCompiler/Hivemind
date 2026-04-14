@@ -68,10 +68,19 @@ export class LocalGitNexusAdapter implements GitNexusAdapter {
         const filePath = parts[1] ?? parts[0];
 
         let status: ChangedFile['status'] = 'modified';
-        if (statusCode === 'A') { status = 'added'; addedCount++; }
-        else if (statusCode === 'D') { status = 'deleted'; removedCount++; }
-        else if (statusCode === 'M') { status = 'modified'; modifiedCount++; }
-        else if (statusCode.startsWith('R')) { status = 'renamed'; modifiedCount++; }
+        if (statusCode === 'A') {
+          status = 'added';
+          addedCount++;
+        } else if (statusCode === 'D') {
+          status = 'deleted';
+          removedCount++;
+        } else if (statusCode === 'M') {
+          status = 'modified';
+          modifiedCount++;
+        } else if (statusCode.startsWith('R')) {
+          status = 'renamed';
+          modifiedCount++;
+        }
 
         changedFiles.push({ path: filePath, status });
       }
@@ -103,7 +112,9 @@ export class LocalGitNexusAdapter implements GitNexusAdapter {
 
       return result;
     } catch (err) {
-      throw new Error(`Failed to detect git changes: ${err instanceof Error ? err.message : String(err)}`);
+      throw new Error(
+        `Failed to detect git changes: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 
@@ -180,6 +191,9 @@ export class LocalGitNexusAdapter implements GitNexusAdapter {
   async emitEvents(result: GitNexusResult): Promise<void> {
     await this.eventBus.emit({
       kind: 'gitnexus.change.detected',
+      schemaVersion: 'v1',
+      sequence: 0,
+      streamId: result.packageNames.join(',') || 'unknown',
       files: result.changedFiles.map((f) => f.path),
       packageNames: result.packageNames,
       diff: result.diff,
@@ -188,6 +202,9 @@ export class LocalGitNexusAdapter implements GitNexusAdapter {
 
     await this.eventBus.emit({
       kind: 'file.change.detected',
+      schemaVersion: 'v1',
+      sequence: 0,
+      streamId: result.packageNames.join(',') || 'unknown',
       files: result.changedFiles.map((f) => f.path),
       packageNames: result.packageNames,
       timestamp: new Date().toISOString(),

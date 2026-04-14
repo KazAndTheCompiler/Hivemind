@@ -9,11 +9,24 @@ import type {
 } from '@openclaw/core-types';
 import { EventBus } from '@openclaw/core-events';
 import { Logger } from '@openclaw/core-logging';
-import { countTokensObject, truncatePayloadToBudget } from '@openclaw/core-tokenizer';
+import { countTokensObject } from '@openclaw/core-tokenizer';
 
-// ---------------------------------------------------------------------------
-// SummaryCondenseService — normalized → 200/300 token relay
-// ---------------------------------------------------------------------------
+export const FIELD_PRIORITY_MATRIX = {
+  summary: 10,
+  blockers: 9,
+  nextActions: 8,
+  nextAction: 8,
+  topFindings: 7,
+  findings: 7,
+  touchedFiles: 5,
+  status: 6,
+  severity: 6,
+  confidence: 4,
+  version: 3,
+  budget: 3,
+  taskId: 2,
+  agentId: 1,
+} as const;
 
 export class SummaryCondenseService {
   private eventBus: EventBus;
@@ -24,7 +37,10 @@ export class SummaryCondenseService {
     this.logger = logger.child({ service: 'SummaryCondenseService' });
   }
 
-  condense(normalized: NormalizedAgentSummary): { relay200: CondensedRelay200; relay300: CondensedRelay300 } {
+  condense(normalized: NormalizedAgentSummary): {
+    relay200: CondensedRelay200;
+    relay300: CondensedRelay300;
+  } {
     const relay200 = this.build200(normalized);
     const relay300 = this.build300(normalized);
 
@@ -38,11 +54,16 @@ export class SummaryCondenseService {
     return { relay200, relay300 };
   }
 
-  async condenseAndEmit(normalized: NormalizedAgentSummary): Promise<{ relay200: CondensedRelay200; relay300: CondensedRelay300 }> {
+  async condenseAndEmit(
+    normalized: NormalizedAgentSummary,
+  ): Promise<{ relay200: CondensedRelay200; relay300: CondensedRelay300 }> {
     const { relay200, relay300 } = this.condense(normalized);
 
     await this.eventBus.emit({
       kind: 'relay.condensed',
+      schemaVersion: 'v1',
+      sequence: 0,
+      streamId: normalized.taskId,
       relay200,
       relay300,
       timestamp: new Date().toISOString(),
@@ -52,7 +73,6 @@ export class SummaryCondenseService {
   }
 
   private build200(normalized: NormalizedAgentSummary): CondensedRelay200 {
-    // Optimize for fast relay: single nextAction, critical findings only in severity
     const nextAction = normalized.nextActions[0] ?? null;
     const severity = this.computeSeverity(normalized);
 
@@ -70,14 +90,11 @@ export class SummaryCondenseService {
       confidence: normalized.confidence,
     };
 
-    // Guarantee the full payload fits within 200 tokens
-    return truncatePayloadToBudget<CondensedRelay200>(base, 200);
+    return truncatePayloadToBudgetWithPriority<CondensedRelay200>(base, 200, FIELD_PRIORITY_MATRIX);
   }
 
   private build300(normalized: NormalizedAgentSummary): CondensedRelay300 {
-    // Preserve more evidence: full nextActions, top findings
     const severity = this.computeSeverity(normalized);
-
     const rankedFindings = this.rankFindings(normalized.toolFindings);
 
     const base: CondensedRelay300 = {
@@ -95,30 +112,19 @@ export class SummaryCondenseService {
       confidence: normalized.confidence,
     };
 
-    // Guarantee the full payload fits within 300 tokens
-    return truncatePayloadToBudget<CondensedRelay300>(base, 300);
+    return truncatePayloadToBudgetWithPriority<CondensedRelay300>(base, 300, FIELD_PRIORITY_MATRIX);
   }
 
   computeSeverity(normalized: NormalizedAgentSummary): Severity {
-    // Critical findings → critical
-    const hasCritical = normalized.toolFindings.some(
-      (f) => f.severity === 'critical',
-    );
+    const hasCritical = normalized.toolFindings.some((f) => f.severity === 'critical');
     if (hasCritical) return 'critical';
 
-    // High findings → high
-    const hasHigh = normalized.toolFindings.some(
-      (f) => f.severity === 'high',
-    );
+    const hasHigh = normalized.toolFindings.some((f) => f.severity === 'high');
     if (hasHigh) return 'high';
 
-    // Failed status → medium
     if (normalized.status === 'failed') return 'medium';
-
-    // Blocked → medium
     if (normalized.status === 'blocked') return 'medium';
 
-    // Low-confidence + blockers → low
     if (normalized.confidence < 0.5 && normalized.blockers.length > 0) return 'low';
 
     return 'none';
@@ -137,4 +143,45 @@ export class SummaryCondenseService {
       (a, b) => (severityOrder[a.severity] ?? 5) - (severityOrder[b.severity] ?? 5),
     );
   }
+}
+
+function truncatePayloadToBudgetWithPriority<T extends object>(
+  payload: T,
+  budget: number,
+  priority: Record<string, number>,
+): T {
+  let current = countTokensObject(payload);
+  if (current <= budget) return payload;
+
+  const sortedFields = Object.keys(priority).sort((a, b) => priority[a] - priority[b]);
+
+  const result = { ...payload } as Record<string, unknown>;
+  const arraysToTrim: string[] = [];
+  const maxIterations = 100;
+  let iterations = 0;
+
+  for (const field of sortedFields) {
+    if (Array.isArray(result[field])) {
+      arraysToTrim.push(field);
+    }
+  }
+
+  while (current > budget && iterations < maxIterations) {
+    iterations++;
+    let trimmed = false;
+
+    for (const field of arraysToTrim) {
+      const arr = result[field] as unknown[];
+      if (arr.length > 0) {
+        result[field] = arr.slice(0, -1);
+        trimmed = true;
+        current = countTokensObject(result);
+        if (current <= budget) return result as T;
+      }
+    }
+
+    if (!trimmed) break;
+  }
+
+  return result as T;
 }

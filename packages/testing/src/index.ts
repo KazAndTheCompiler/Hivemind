@@ -23,7 +23,9 @@ export function createRawSummary(overrides: Partial<RawAgentSummary> = {}): RawA
   };
 }
 
-export function createNormalizedSummary(overrides: Partial<NormalizedAgentSummary> = {}): NormalizedAgentSummary {
+export function createNormalizedSummary(
+  overrides: Partial<NormalizedAgentSummary> = {},
+): NormalizedAgentSummary {
   return {
     taskId: 'test-task-1',
     agentId: 'test-worker-1',

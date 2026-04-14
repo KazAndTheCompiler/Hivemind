@@ -47,30 +47,39 @@ export class AutomationRunner {
   private cwd: string;
   private parallel: boolean;
 
-  constructor(
-    logger: Logger,
-    registry: ToolAdapterRegistry,
-    options?: RunnerOptions,
-  ) {
+  constructor(logger: Logger, registry: ToolAdapterRegistry, options?: RunnerOptions) {
     this.logger = logger.child({ service: 'AutomationRunner' });
     this.registry = registry;
     this.cwd = options?.cwd ?? process.cwd();
     this.parallel = options?.parallel ?? false;
   }
 
-  async runFastLoop(target: ToolExecutionTarget, policy: EnforcementPolicy): Promise<AutomationRun> {
+  async runFastLoop(
+    target: ToolExecutionTarget,
+    policy: EnforcementPolicy,
+  ): Promise<AutomationRun> {
     return this.run('changed_file', target, policy);
   }
 
-  async runCheckpoint(target: ToolExecutionTarget, policy: EnforcementPolicy): Promise<AutomationRun> {
+  async runCheckpoint(
+    target: ToolExecutionTarget,
+    policy: EnforcementPolicy,
+  ): Promise<AutomationRun> {
     return this.run('checkpoint', target, policy);
   }
 
-  async runFullRepo(target: ToolExecutionTarget, policy: EnforcementPolicy): Promise<AutomationRun> {
+  async runFullRepo(
+    target: ToolExecutionTarget,
+    policy: EnforcementPolicy,
+  ): Promise<AutomationRun> {
     return this.run('full_repo', target, policy);
   }
 
-  private async run(mode: AutomationMode, target: ToolExecutionTarget, policy: EnforcementPolicy): Promise<AutomationRun> {
+  private async run(
+    mode: AutomationMode,
+    target: ToolExecutionTarget,
+    policy: EnforcementPolicy,
+  ): Promise<AutomationRun> {
     const runId = this.generateRunId();
     const startedAt = new Date().toISOString();
 
@@ -138,7 +147,15 @@ export class AutomationRunner {
         const { stdout, stderr, exitCode } = await this.executeCommand(cmd, toolPolicy.timeoutMs);
 
         const durationMs = Date.now() - startTime;
-        lastResult = tool.normalizeResult(stdout, stderr, exitCode, durationMs, target, mode, retryCount);
+        lastResult = tool.normalizeResult(
+          stdout,
+          stderr,
+          exitCode,
+          durationMs,
+          target,
+          mode,
+          retryCount,
+        );
 
         if (lastResult.status === 'passed' || lastResult.status === 'skipped') {
           return lastResult;
@@ -179,7 +196,8 @@ export class AutomationRunner {
     } catch (err) {
       const nodeErr = err as { code?: string | number; message: string; stderr?: string };
       const code = nodeErr.code;
-      const isTimedOut = code === 'ETIMEDOUT' || code === 'ETIME' || nodeErr.message.includes('timed out');
+      const isTimedOut =
+        code === 'ETIMEDOUT' || code === 'ETIME' || nodeErr.message.includes('timed out');
       if (isTimedOut) {
         return { stdout: '', stderr: 'Command timed out', exitCode: null };
       }
@@ -203,7 +221,10 @@ export class AutomationRunner {
     });
   }
 
-  private makeDecision(results: ToolExecutionResult[], policy: EnforcementPolicy): EnforcementDecision {
+  private makeDecision(
+    results: ToolExecutionResult[],
+    policy: EnforcementPolicy,
+  ): EnforcementDecision {
     const blockingTools: ToolName[] = [];
     const warningTools: ToolName[] = [];
 
@@ -224,13 +245,15 @@ export class AutomationRunner {
       canProceed,
       blockingTools,
       warningTools,
-      rationale: canProceed
-        ? 'No blocking failures'
-        : `Blocked by: ${blockingTools.join(', ')}`,
+      rationale: canProceed ? 'No blocking failures' : `Blocked by: ${blockingTools.join(', ')}`,
     };
   }
 
-  private createSkippedResult(tool: ToolName, target: ToolExecutionTarget, mode: AutomationMode): ToolExecutionResult {
+  private createSkippedResult(
+    tool: ToolName,
+    target: ToolExecutionTarget,
+    mode: AutomationMode,
+  ): ToolExecutionResult {
     return {
       tool,
       mode,
@@ -246,7 +269,12 @@ export class AutomationRunner {
     };
   }
 
-  private createErrorResult(tool: ToolName, target: ToolExecutionTarget, mode: AutomationMode, error: string): ToolExecutionResult {
+  private createErrorResult(
+    tool: ToolName,
+    target: ToolExecutionTarget,
+    mode: AutomationMode,
+    error: string,
+  ): ToolExecutionResult {
     return {
       tool,
       mode,

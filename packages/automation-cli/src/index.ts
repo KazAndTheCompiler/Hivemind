@@ -159,13 +159,15 @@ async function main(): Promise<void> {
   switch (command) {
     case 'fast': {
       const filesArgIndex = process.argv.findIndex((a) => a === '--files');
-      const files = filesArgIndex > 0 ? process.argv[filesArgIndex + 1].split(',') : ['src/**/*.ts'];
+      const files =
+        filesArgIndex > 0 ? process.argv[filesArgIndex + 1].split(',') : ['src/**/*.ts'];
       await runFastLoop(files);
       break;
     }
     case 'checkpoint': {
       const filesArgIndex = process.argv.findIndex((a) => a === '--files');
-      const files = filesArgIndex > 0 ? process.argv[filesArgIndex + 1].split(',') : ['src/**/*.ts'];
+      const files =
+        filesArgIndex > 0 ? process.argv[filesArgIndex + 1].split(',') : ['src/**/*.ts'];
       await runCheckpoint(files);
       break;
     }
