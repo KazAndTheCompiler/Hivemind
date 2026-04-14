@@ -1,5 +1,6 @@
 // OrchestratorService — supervisor pattern for worker agents
 // Coordinates the full pipeline: ingest → sanitize → validate → normalize → condense → relay
+// Supports pipeline ownership lock, partial failure strategy, and deterministic replay
 
 import type {
   NormalizedAgentSummary,
@@ -7,6 +8,13 @@ import type {
   CondensedRelay300,
   OpenClawConfig,
   RawAgentSummary,
+  PipelineOutcome,
+  PipelineResult,
+  PipelineStepResult,
+  SystemState,
+  TaskState,
+  PipelineLock,
+  ToolFinding,
 } from '@openclaw/core-types';
 import { EventBus } from '@openclaw/core-events';
 import { Logger, createLoggerFromConfig } from '@openclaw/core-logging';
@@ -17,11 +25,21 @@ import { MainAgentRelayService } from '@openclaw/agent-relay';
 import { AgentRouter } from '@openclaw/agent-router';
 import { AgentMemory, DurableFileSink } from '@openclaw/agent-memory';
 import { DurableFileAuditStore } from '@openclaw/audit-store';
+import { LocalSecDevAdapter } from '@openclaw/tool-secdev';
+import { ChangedFileQualityService } from '@openclaw/change-detector';
+import { LocalEslintRunner } from '@openclaw/tool-eslint';
+import { LocalPrettierRunner } from '@openclaw/tool-prettier';
 import * as fs from 'fs';
 
 export interface ColdStartCheckResult {
   passed: boolean;
   checks: Array<{ name: string; passed: boolean; detail?: string }>;
+}
+
+export interface SemanticGuardResult {
+  passed: boolean;
+  issues: string[];
+  findings: ToolFinding[];
 }
 
 export interface ReplayResult {
@@ -31,10 +49,10 @@ export interface ReplayResult {
 }
 
 export interface QualityScore {
-  lint: number;    // 0-100
-  format: number;  // 0-100
-  security: number; // 0-100
-  overall: number; // 0-100
+  lint: number;
+  format: number;
+  security: number;
+  overall: number;
 }
 
 export class OrchestratorService {
@@ -48,24 +66,31 @@ export class OrchestratorService {
   private router: AgentRouter;
   private memory: AgentMemory;
   private auditStore: DurableFileAuditStore;
+  private secdevAdapter: LocalSecDevAdapter;
+  private qualityService: ChangedFileQualityService;
   private running = false;
   private pendingOperations = new Set<Promise<unknown>>();
   private pipelineHalted = false;
-  private pipelineRunPromise: Promise<void> | null = null; // Run coalescing
+  private pipelineRunPromise: Promise<void> | null = null;
+  private systemState: SystemState = {
+    schemaVersion: 'v1',
+    tasks: {},
+    streams: {},
+    lastUpdated: new Date().toISOString(),
+    globalSequence: 0,
+  };
 
   constructor(config: OpenClawConfig) {
     this.config = config;
     this.logger = createLoggerFromConfig(config);
     this.eventBus = new EventBus(this.logger);
 
-    // Set up durable audit store
     this.auditStore = new DurableFileAuditStore(
       config.audit.storePath,
       config.audit.deadLetterPath,
       this.logger,
     );
 
-    // Set up dead-letter handler
     this.eventBus.setDeadLetterHandler(async (event, reason) => {
       this.logger.warn('orchestrator.dead_letter', { reason, kind: event.kind });
       try {
@@ -78,22 +103,27 @@ export class OrchestratorService {
       }
     });
 
-    // Wire up services
     this.ingestService = new AgentSummaryIngestService(this.eventBus, this.logger);
     this.normalizationService = new SummaryNormalizationService(this.eventBus, this.logger);
     this.condenseService = new SummaryCondenseService(this.eventBus, this.logger);
     this.relayService = new MainAgentRelayService(this.eventBus, this.logger);
     this.router = new AgentRouter(this.eventBus, this.logger);
 
-    // Set up memory
+    this.secdevAdapter = new LocalSecDevAdapter(this.logger);
+    this.qualityService = new ChangedFileQualityService(
+      this.eventBus,
+      this.logger,
+      new LocalEslintRunner(this.logger),
+      new LocalPrettierRunner(this.logger),
+      this.secdevAdapter,
+    );
+
     const memoryPath = `${config.audit.storePath}/memory`;
     const memorySink = new DurableFileSink(memoryPath, this.logger);
     this.memory = new AgentMemory(memorySink, 'orchestrator');
 
-    // Start router
     this.router.startListening();
 
-    // Audit all events
     this.eventBus.onAny(async (event) => {
       const op = this.trackOperation(this.auditStore.persist(event));
       this.pendingOperations.add(op);
@@ -111,14 +141,9 @@ export class OrchestratorService {
     });
   }
 
-  // ---------------------------------------------------------------------------
-  // Cold Start Validation
-  // ---------------------------------------------------------------------------
-
   coldStartCheck(): ColdStartCheckResult {
     const checks: ColdStartCheckResult['checks'] = [];
 
-    // Check config
     try {
       ConfigService.validateStartup(this.config);
       checks.push({ name: 'config_valid', passed: true });
@@ -126,7 +151,6 @@ export class OrchestratorService {
       checks.push({ name: 'config_valid', passed: false, detail: err instanceof Error ? err.message : String(err) });
     }
 
-    // Check audit store write permissions
     try {
       fs.mkdirSync(this.config.audit.storePath, { recursive: true });
       fs.accessSync(this.config.audit.storePath, fs.constants.W_OK);
@@ -135,7 +159,6 @@ export class OrchestratorService {
       checks.push({ name: 'audit_writeable', passed: false, detail: err instanceof Error ? err.message : String(err) });
     }
 
-    // Check workspace integrity
     const workspacePath = this.config.workspace;
     if (workspacePath && workspacePath !== '.' && !fs.existsSync(workspacePath)) {
       checks.push({ name: 'workspace_exists', passed: false, detail: `Workspace not found: ${workspacePath}` });
@@ -143,7 +166,6 @@ export class OrchestratorService {
       checks.push({ name: 'workspace_exists', passed: true });
     }
 
-    // Check tool availability (basic check — npx available)
     try {
       const { execSync } = require('child_process');
       execSync('npx --version', { stdio: 'ignore', timeout: 5000 });
@@ -158,14 +180,11 @@ export class OrchestratorService {
     };
   }
 
-  // ---------------------------------------------------------------------------
-  // Main Pipeline: raw → validate → sanitize → normalize → condense → relay
-  // ---------------------------------------------------------------------------
-
   async processSummary(raw: unknown): Promise<{
     normalized: NormalizedAgentSummary;
     relay200: CondensedRelay200;
     relay300: CondensedRelay300;
+    result: PipelineResult;
   }> {
     if (!this.running) {
       throw new Error('Orchestrator is not running');
@@ -175,58 +194,211 @@ export class OrchestratorService {
       throw new Error('Pipeline is halted due to critical severity. Manual intervention required.');
     }
 
-    // Step 1: Ingest and validate (TRUST BOUNDARY — never trust raw input)
-    const validated = await this.ingestService.ingest(raw);
+    const taskId = (raw as { taskId?: string }).taskId ?? `task_${Date.now()}`;
+    const steps: PipelineStepResult[] = [];
+    const startTime = Date.now();
 
-    // Step 2: Sanitize — strip potentially dangerous fields
-    const sanitized = this.sanitizeSummary(validated);
+    try {
+      const validated = await this.ingestService.ingest(raw);
+      steps.push({ step: 'ingest', success: true, durationMs: Date.now() - startTime });
 
-    // Step 3: Normalize (with optional findings from SecDev)
-    const normalized = await this.normalizationService.normalizeAndEmit(sanitized);
+      const sanitized = this.sanitizeSummary(validated);
+      const normalized = await this.normalizationService.normalizeAndEmit(sanitized);
+      steps.push({ step: 'normalize', success: true, durationMs: Date.now() - startTime });
 
-    // Step 4: Condense (guarantees 200/300 token budgets)
-    const { relay200, relay300 } = await this.condenseService.condenseAndEmit(normalized);
-
-    // Step 5: Relay to main agent (emits relay.delivered or relay.delivery_failed)
-    const delivery = await this.relayService.deliverAndEmit(relay200, relay300);
-
-    if (!delivery.delivered) {
-      this.logger.error('orchestrator.relay.delivery_failed', { taskId: relay200.taskId });
-    }
-
-    // Step 6: Check for kill switch — halt pipeline if critical severity
-    if (relay200.severity === 'critical' || relay300.severity === 'critical') {
-      this.logger.warn('orchestrator.pipeline.halted.critical_severity', {
-        taskId: relay200.taskId,
+      const secdevFindings = await this.secdevAdapter.analyzeEmission({
+        kind: 'normalized',
+        summary: normalized,
       });
-      this.pipelineHalted = true;
+      normalized.toolFindings.push(...secdevFindings);
+
+      const qualityResult = await this.qualityService.runQualityGate(normalized.touchedFiles);
+      normalized.toolFindings.push(...qualityResult.findings);
+      steps.push({ step: 'quality_gate', success: qualityResult.findings.filter(f => f.severity === 'critical' || f.severity === 'high').length === 0, durationMs: Date.now() - startTime });
+
+      const semanticGuardResult = this.runSemanticGuard(normalized);
+      if (!semanticGuardResult.passed) {
+        normalized.toolFindings.push(...semanticGuardResult.findings);
+        this.logger.warn('orchestrator.semantic_guard.failed', {
+          taskId,
+          issues: semanticGuardResult.issues,
+        });
+      }
+
+      const { relay200, relay300 } = await this.condenseService.condenseAndEmit(normalized);
+      steps.push({ step: 'condense', success: true, durationMs: Date.now() - startTime });
+
+      const delivery = await this.relayService.deliverAndEmit(relay200, relay300);
+      steps.push({ step: 'relay', success: delivery.delivered, durationMs: Date.now() - startTime });
+
+      if (relay200.severity === 'critical' || relay300.severity === 'critical') {
+        this.pipelineHalted = true;
+      }
+
+      await this.memory.saveSummary(normalized);
+      await this.memory.saveRelay(relay200, relay300);
+      this.applyConfidenceDecay(normalized);
+
+      this.updateSystemState({
+        taskId,
+        status: normalized.status,
+        confidence: normalized.confidence,
+        severity: relay200.severity,
+        processedAt: new Date().toISOString(),
+        relayDelivered: delivery.delivered,
+        relayBlocked: delivery.routingDecision.decision === 'block',
+        blockerReason: delivery.routingDecision.decision === 'block' ? delivery.routingDecision.reason : undefined,
+      });
+
+      const failedSteps = steps.filter((s) => !s.success).length;
+      const outcome: PipelineOutcome = failedSteps === 0 ? 'success' : failedSteps === steps.length ? 'failed' : 'partial';
+
+      return {
+        normalized,
+        relay200,
+        relay300,
+        result: { outcome, taskId, steps, timestamp: new Date().toISOString() },
+      };
+    } catch (err) {
+      steps.push({
+        step: 'unknown',
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+        durationMs: Date.now() - startTime,
+      });
+
+      return {
+        normalized: {} as NormalizedAgentSummary,
+        relay200: {} as CondensedRelay200,
+        relay300: {} as CondensedRelay300,
+        result: { outcome: 'failed', taskId, steps, timestamp: new Date().toISOString() },
+      };
     }
-
-    // Step 7: Persist in memory
-    await this.memory.saveSummary(normalized);
-    await this.memory.saveRelay(relay200, relay300);
-
-    // Step 8: Confidence decay — degrade confidence if relay was large
-    this.applyConfidenceDecay(normalized);
-
-    return { normalized, relay200, relay300 };
   }
 
-  /**
-   * Sanitize a raw agent summary before processing.
-   * Strips potentially dangerous fields, enforces bounds.
-   */
+  private updateSystemState(taskState: TaskState): void {
+    this.systemState.tasks[taskState.taskId] = taskState;
+    this.systemState.lastUpdated = new Date().toISOString();
+    this.systemState.globalSequence++;
+  }
+
+  reduce(state: SystemState, event: { type: string; [key: string]: unknown }): SystemState {
+    switch (event.type) {
+      case 'task.started': {
+        const taskId = event.taskId as string;
+        return {
+          ...state,
+          tasks: {
+            ...state.tasks,
+            [taskId]: {
+              taskId,
+              status: 'working',
+              confidence: 1.0,
+              severity: 'none',
+              processedAt: event.timestamp as string,
+              relayDelivered: false,
+              relayBlocked: false,
+            },
+          },
+          lastUpdated: event.timestamp as string,
+          globalSequence: state.globalSequence + 1,
+        };
+      }
+      case 'task.completed': {
+        const taskId = event.taskId as string;
+        const existing = state.tasks[taskId];
+        if (!existing) return state;
+        return {
+          ...state,
+          tasks: {
+            ...state.tasks,
+            [taskId]: { ...existing, status: 'done', processedAt: event.timestamp as string },
+          },
+          lastUpdated: event.timestamp as string,
+          globalSequence: state.globalSequence + 1,
+        };
+      }
+      case 'task.failed': {
+        const taskId = event.taskId as string;
+        const existing = state.tasks[taskId];
+        if (!existing) return state;
+        return {
+          ...state,
+          tasks: {
+            ...state.tasks,
+            [taskId]: {
+              ...existing,
+              status: 'failed',
+              blockerReason: event.reason as string,
+              processedAt: event.timestamp as string,
+            },
+          },
+          lastUpdated: event.timestamp as string,
+          globalSequence: state.globalSequence + 1,
+        };
+      }
+      case 'relay.blocked': {
+        const taskId = event.taskId as string;
+        const existing = state.tasks[taskId];
+        if (!existing) return state;
+        return {
+          ...state,
+          tasks: {
+            ...state.tasks,
+            [taskId]: {
+              ...existing,
+              relayBlocked: true,
+              blockerReason: event.reason as string,
+              processedAt: event.timestamp as string,
+            },
+          },
+          lastUpdated: event.timestamp as string,
+          globalSequence: state.globalSequence + 1,
+        };
+      }
+      case 'relay.released': {
+        const taskId = event.taskId as string;
+        const existing = state.tasks[taskId];
+        if (!existing) return state;
+        return {
+          ...state,
+          tasks: {
+            ...state.tasks,
+            [taskId]: {
+              ...existing,
+              relayBlocked: false,
+              processedAt: event.timestamp as string,
+            },
+          },
+          lastUpdated: event.timestamp as string,
+          globalSequence: state.globalSequence + 1,
+        };
+      }
+      default:
+        return state;
+    }
+  }
+
+  replay(events: Array<{ type: string; [key: string]: unknown }>): SystemState {
+    let state = this.systemState;
+    for (const event of events) {
+      state = this.reduce(state, event);
+    }
+    return state;
+  }
+
+  getSystemState(): SystemState {
+    return { ...this.systemState };
+  }
+
   private sanitizeSummary(raw: RawAgentSummary): RawAgentSummary {
     return {
       ...raw,
-      // Enforce bounds
       summary: raw.summary.slice(0, 5000),
       touchedFiles: raw.touchedFiles.slice(0, 100),
       blockers: raw.blockers.slice(0, 20),
       nextActions: raw.nextActions.slice(0, 20),
-      // Clamp confidence
       confidence: Math.max(0, Math.min(1, raw.confidence)),
-      // Sanitize metadata
       metadata: raw.metadata ? this.sanitizeMetadata(raw.metadata) : undefined,
     };
   }
@@ -234,9 +406,7 @@ export class OrchestratorService {
   private sanitizeMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
     const sanitized: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(metadata)) {
-      // Skip sensitive-looking keys
       if (/secret|password|token|key|credential/i.test(key)) continue;
-      // Only allow primitive values and simple arrays
       if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || value === null) {
         sanitized[key] = value;
       } else if (Array.isArray(value) && value.every((v) => typeof v === 'string')) {
@@ -246,32 +416,87 @@ export class OrchestratorService {
     return sanitized;
   }
 
-  /**
-   * Apply confidence decay based on execution history.
-   * Degrades confidence if:
-   * - Many retries
-   * - Many failures
-   * - Conflicting tool results
-   */
   private applyConfidenceDecay(normalized: NormalizedAgentSummary): void {
     const criticalFindings = normalized.toolFindings.filter((f) => f.severity === 'critical').length;
     const highFindings = normalized.toolFindings.filter((f) => f.severity === 'high').length;
     const hasBlockers = normalized.blockers.length > 0;
 
-    // Decay confidence if many critical/high findings
     if (criticalFindings > 0 || highFindings > 2) {
       normalized.confidence = Math.max(0, normalized.confidence - 0.1 * criticalFindings - 0.05 * highFindings);
     }
 
-    // Decay if blocked
     if (hasBlockers) {
       normalized.confidence = Math.max(0, normalized.confidence - 0.15);
     }
   }
 
-  /**
-   * Compute quality score from quality gate results.
-   */
+  private runSemanticGuard(normalized: NormalizedAgentSummary): SemanticGuardResult {
+    const issues: string[] = [];
+    const findings: ToolFinding[] = [];
+    const text = [
+      normalized.conciseSummary,
+      ...normalized.blockers,
+      ...normalized.nextActions,
+    ].join(' ').toLowerCase();
+
+    const emptyDone = normalized.conciseSummary.trim().length === 0;
+    const hasBlockers = normalized.blockers.length > 0;
+    if (emptyDone && !hasBlockers) {
+      issues.push('empty_done_no_blockers');
+      findings.push({
+        source: 'secdev',
+        severity: 'low',
+        code: 'SEMANTIC_EMPTY_DONE',
+        message: 'Empty summary without blockers is anomalous',
+        fileRefs: [],
+        suggestedAction: 'Provide a summary or declare blockers',
+      });
+    }
+
+    const fileCount = normalized.touchedFiles.length;
+    if (fileCount === 0) {
+      issues.push('no_file_references');
+      findings.push({
+        source: 'secdev',
+        severity: 'low',
+        code: 'SEMANTIC_NO_FILE_REFS',
+        message: 'No file references in touchedFiles',
+        fileRefs: [],
+        suggestedAction: 'Include file paths that were modified',
+      });
+    }
+
+    const actionVerbs = /create|update|delete|fix|implement|refactor|test|add|remove|modify|patch/i;
+    if (!actionVerbs.test(text)) {
+      issues.push('no_action_verbs');
+      findings.push({
+        source: 'secdev',
+        severity: 'low',
+        code: 'SEMANTIC_NO_ACTION_VERBS',
+        message: 'No action verbs detected in summary',
+        fileRefs: [],
+        suggestedAction: 'Use action verbs: create, update, delete, fix, implement, refactor, test',
+      });
+    }
+
+    const forbiddenPhrases = ['completed task', 'worked on', 'made changes', 'did stuff', 'something'];
+    for (const phrase of forbiddenPhrases) {
+      if (text.includes(phrase)) {
+        issues.push(`forbidden_phrase: ${phrase}`);
+        findings.push({
+          source: 'secdev',
+          severity: 'low',
+          code: 'SEMANTIC_FORBIDDEN_PHRASE',
+          message: `Forbidden phrase detected: "${phrase}"`,
+          fileRefs: [],
+          suggestedAction: 'Replace generic phrases with specific descriptions',
+        });
+      }
+    }
+
+    return { passed: issues.length === 0, issues, findings };
+  }
+
   static computeQualityScore(gate: {
     prettier: { ran: boolean; formattedFiles: string[]; failedFiles: string[] };
     eslint: { ran: boolean; fixedFiles: string[]; failedFiles: string[]; warnings: number; errors: number };
@@ -293,23 +518,12 @@ export class OrchestratorService {
     const securityIssues = gate.findings.filter((f) => f.severity === 'high' || f.severity === 'critical').length;
     const security = Math.max(0, 100 - securityIssues * 20);
 
-    return {
-      lint,
-      format,
-      security,
-      overall: Math.round((lint + format + security) / 3),
-    };
+    return { lint, format, security, overall: Math.round((lint + format + security) / 3) };
   }
-
-  // ---------------------------------------------------------------------------
-  // Run Coalescing — prevent overlapping quality gate runs
-  // ---------------------------------------------------------------------------
 
   async scheduleQualityGate(files: string[]): Promise<void> {
     if (this.pipelineRunPromise) {
-      this.logger.debug('orchestrator.quality.gate.coalesced', {
-        pendingFiles: files.length,
-      });
+      this.logger.debug('orchestrator.quality.gate.coalesced', { pendingFiles: files.length });
       return;
     }
 
@@ -321,16 +535,8 @@ export class OrchestratorService {
   }
 
   private async runQualityGate(_files: string[]): Promise<void> {
-    // In production, this would trigger the quality gate pipeline
-    // For now, just log
-    this.logger.info('orchestrator.quality.gate.executed', {
-      fileCount: _files.length,
-    });
+    this.logger.info('orchestrator.quality.gate.executed', { fileCount: _files.length });
   }
-
-  // ---------------------------------------------------------------------------
-  // Replay Capability
-  // ---------------------------------------------------------------------------
 
   async replayEvents(kind?: string): Promise<ReplayResult> {
     const events = await this.auditStore.replay(kind);
@@ -358,12 +564,7 @@ export class OrchestratorService {
     return { eventCount: events.length, pipelineRuns, errors };
   }
 
-  // ---------------------------------------------------------------------------
-  // Lifecycle
-  // ---------------------------------------------------------------------------
-
   async start(): Promise<void> {
-    // Cold start validation
     const coldStart = this.coldStartCheck();
     if (!coldStart.passed) {
       const failed = coldStart.checks.filter((c) => !c.passed);
@@ -374,12 +575,13 @@ export class OrchestratorService {
     }
 
     this.running = true;
-    this.logger.info('orchestrator.started', {
-      maxWorkers: this.config.orchestrator.maxConcurrentWorkers,
-    });
+    this.logger.info('orchestrator.started', { maxWorkers: this.config.orchestrator.maxConcurrentWorkers });
 
     await this.eventBus.emit({
       kind: 'orchestrator.started',
+      schemaVersion: 'v1',
+      sequence: 0,
+      streamId: 'orchestrator',
       timestamp: new Date().toISOString(),
     });
   }
@@ -388,11 +590,8 @@ export class OrchestratorService {
     this.running = false;
     this.logger.info('orchestrator.shutdown.start', { reason });
 
-    // Wait for pending operations with bounded timeout (1s max per op)
     if (this.pendingOperations.size > 0) {
-      this.logger.info('orchestrator.shutdown.waiting', {
-        pendingCount: this.pendingOperations.size,
-      });
+      this.logger.info('orchestrator.shutdown.waiting', { pendingCount: this.pendingOperations.size });
       await Promise.allSettled(
         Array.from(this.pendingOperations).map(
           (p) => Promise.race([p, new Promise((r) => setTimeout(r, 1000))]),
@@ -400,7 +599,6 @@ export class OrchestratorService {
       );
     }
 
-    // Flush memory and audit
     await this.memory.flush();
     await this.auditStore.flush();
 
@@ -408,14 +606,13 @@ export class OrchestratorService {
 
     await this.eventBus.emit({
       kind: 'orchestrator.shutdown',
+      schemaVersion: 'v1',
+      sequence: 0,
+      streamId: 'orchestrator',
       reason,
       timestamp: new Date().toISOString(),
     });
   }
-
-  // ---------------------------------------------------------------------------
-  // Helpers
-  // ---------------------------------------------------------------------------
 
   private trackOperation<T>(op: Promise<T>): Promise<T> {
     this.pendingOperations.add(op);
@@ -428,8 +625,21 @@ export class OrchestratorService {
     this.logger.info('orchestrator.pipeline.unhalted');
   }
 
+  acquirePipelineLock(owner: 'daemon' | 'orchestrator' | 'replay', _taskId: string): boolean {
+    const currentLock = this.eventBus.getLock();
+    if (currentLock.owner !== null && currentLock.owner !== owner) {
+      return false;
+    }
+    return true;
+  }
+
+  releasePipelineLock(owner: 'daemon' | 'orchestrator' | 'replay'): void {
+    this.eventBus.releaseLock(owner);
+  }
+
   get isRunning(): boolean { return this.running; }
   get isHalted(): boolean { return this.pipelineHalted; }
+  get pipelineLock(): PipelineLock { return this.eventBus.getLock(); }
 
   get status() {
     return {
@@ -437,22 +647,21 @@ export class OrchestratorService {
       halted: this.pipelineHalted,
       inboxSize: this.router.inboxSize,
       unreadCount: this.router.unreadCount,
-      eventBufferUtilization: this.eventBus.capacityUtilization,
-      eventOverflowCount: this.eventBus.overflowCount,
-      eventTotalProcessed: this.eventBus.totalProcessed,
-      eventTotalFailures: this.eventBus.totalFailures,
+      eventBufferUtilization: this.eventBus.getCapacityUtilization(),
+      eventOverflowCount: this.eventBus.getOverflowCount(),
+      eventTotalProcessed: this.eventBus.getTotalProcessed(),
+      eventTotalFailures: this.eventBus.getTotalFailures(),
       pendingOperations: this.pendingOperations.size,
       auditPendingWrites: this.auditStore.pendingCount,
       auditLogPaths: this.auditStore.logPaths,
+      metrics: this.eventBus.getMetrics(),
+      systemState: this.getSystemState(),
     };
   }
 }
 
-// Factory function
 export function createOrchestrator(_config?: unknown): OrchestratorService {
-  const configService = ConfigService.fromFileOrDefaults(
-    process.env.OPENCLAW_CONFIG,
-  );
+  const configService = ConfigService.fromFileOrDefaults(process.env.OPENCLAW_CONFIG);
   const cfg = configService.getConfig();
   ConfigService.validateStartup(cfg);
   return new OrchestratorService(cfg);

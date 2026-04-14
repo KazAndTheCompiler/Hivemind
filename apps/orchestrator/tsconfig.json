@@ -19,6 +19,9 @@
     { "path": "../../packages/summarizer" },
     { "path": "../../packages/condense-engine" },
     { "path": "../../packages/change-detector" },
-    { "path": "../../packages/audit-store" }
+    { "path": "../../packages/audit-store" },
+    { "path": "../../packages/tool-secdev" },
+    { "path": "../../packages/tool-eslint" },
+    { "path": "../../packages/tool-prettier" }
   ]
 }

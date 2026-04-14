@@ -28,7 +28,10 @@
     "@openclaw/summarizer": "workspace:*",
     "@openclaw/condense-engine": "workspace:*",
     "@openclaw/change-detector": "workspace:*",
-    "@openclaw/audit-store": "workspace:*"
+    "@openclaw/audit-store": "workspace:*",
+    "@openclaw/tool-secdev": "workspace:*",
+    "@openclaw/tool-eslint": "workspace:*",
+    "@openclaw/tool-prettier": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.3.3",
