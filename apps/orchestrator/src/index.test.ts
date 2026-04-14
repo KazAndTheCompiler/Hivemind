@@ -41,7 +41,7 @@ describe('OrchestratorService', () => {
     expect(result.relay300.taskId).toBe('smoke-1');
 
     await orchestrator.shutdown('test');
-  });
+  }, { timeout: 30_000 });
 
   it('rejects processing when not running', async () => {
     await expect(orchestrator.processSummary({

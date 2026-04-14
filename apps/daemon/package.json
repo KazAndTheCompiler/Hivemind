@@ -27,6 +27,7 @@
     "@openclaw/tool-prettier": "workspace:*",
     "@openclaw/tool-secdev": "workspace:*",
     "@openclaw/change-detector": "workspace:*",
+    "@openclaw/tool-runner": "workspace:*",
     "@openclaw/audit-store": "workspace:*"
   },
   "devDependencies": {

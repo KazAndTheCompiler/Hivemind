@@ -1,16 +1,22 @@
-// Watch daemon — monitors file changes, routes through GitNexus, triggers quality gates, systemd-friendly
+// Watch daemon — monitors file changes, routes through GitNexus, triggers quality gates
+// Flow: fs → debounce → gitnexus → canonical change event → pipeline
+// systemd-friendly with graceful shutdown
 
 import chokidar, { FSWatcher } from 'chokidar';
 import { ConfigService } from '@openclaw/core-config';
 import { createLogger, Logger } from '@openclaw/core-logging';
 import { EventBus } from '@openclaw/core-events';
 import type { OpenClawConfig } from '@openclaw/core-types';
-import { LocalEslintRunner } from '@openclaw/tool-eslint';
+import { LocalEslintRunner, CancelToken } from '@openclaw/tool-eslint';
 import { LocalPrettierRunner } from '@openclaw/tool-prettier';
 import { LocalSecDevAdapter } from '@openclaw/tool-secdev';
 import { LocalGitNexusAdapter, type GitNexusResult } from '@openclaw/tool-gitnexus';
 import { ChangedFileQualityService } from '@openclaw/change-detector';
+import { ToolExecutionQueue } from '@openclaw/tool-runner';
 import { DurableFileAuditStore } from '@openclaw/audit-store';
+
+const TOOL_TIMEOUT = 15_000;
+const MAX_CONCURRENT_TOOLS = 4;
 
 export class WatchDaemon {
   private config: OpenClawConfig;
@@ -22,8 +28,10 @@ export class WatchDaemon {
   private qualityService: ChangedFileQualityService;
   private auditStore: DurableFileAuditStore;
   private gitNexus: LocalGitNexusAdapter;
+  private toolQueue: ToolExecutionQueue;
   private running = false;
-  private qualityGateLock = false; // coalescing lock for Phase 8
+  private pipelineRunPromise: Promise<void> | null = null; // Run coalescing
+  private cancelToken: CancelToken | null = null; // Cancellation support
 
   constructor(config: OpenClawConfig) {
     this.config = config;
@@ -33,11 +41,20 @@ export class WatchDaemon {
     // Initialize GitNexus adapter as authoritative change intelligence layer
     this.gitNexus = new LocalGitNexusAdapter(this.eventBus, this.logger);
 
+    // Tool execution queue with bounded concurrency
+    this.toolQueue = new ToolExecutionQueue(this.logger, {
+      maxConcurrent: MAX_CONCURRENT_TOOLS,
+      defaultTimeoutMs: TOOL_TIMEOUT,
+    });
+
     // Wire up tool adapters
     const eslintRunner = new LocalEslintRunner(this.logger, {
       configFile: this.config.tools.eslint.configFile,
+      timeoutMs: TOOL_TIMEOUT,
     });
-    const prettierRunner = new LocalPrettierRunner(this.logger);
+    const prettierRunner = new LocalPrettierRunner(this.logger, {
+      timeoutMs: TOOL_TIMEOUT,
+    });
     const secdevAdapter = new LocalSecDevAdapter(this.logger);
 
     this.qualityService = new ChangedFileQualityService(
@@ -48,7 +65,7 @@ export class WatchDaemon {
       secdevAdapter,
     );
 
-    // Use durable file-backed audit store
+    // Use durable file-backed audit store with JSONL logs
     this.auditStore = new DurableFileAuditStore(
       config.audit.storePath,
       config.audit.deadLetterPath,
@@ -82,6 +99,8 @@ export class WatchDaemon {
       watchPaths: this.config.daemon.watchPaths,
       debounceMs: this.config.daemon.debounceMs,
       gitNexusEnabled: this.config.tools.gitnexus.enabled,
+      toolTimeout: TOOL_TIMEOUT,
+      maxConcurrentTools: MAX_CONCURRENT_TOOLS,
     });
   }
 
@@ -95,12 +114,7 @@ export class WatchDaemon {
     this.logger.info('daemon.starting');
 
     this.watcher = chokidar.watch(this.config.daemon.watchPaths, {
-      ignored: [
-        /node_modules/,
-        /dist/,
-        /\.git/,
-        /\.openclaw/,
-      ],
+      ignored: [/node_modules/, /dist/, /\.git/, /\.openclaw/],
       persistent: true,
       ignoreInitial: true,
     });
@@ -110,14 +124,10 @@ export class WatchDaemon {
       .on('change', (filePath) => this.onFileChange(filePath))
       .on('unlink', (filePath) => this.onFileChange(filePath))
       .on('error', (error) => {
-        this.logger.error('daemon.watcher.error', {
-          error: error.message,
-        });
+        this.logger.error('daemon.watcher.error', { error: error.message });
       })
       .on('ready', () => {
-        this.logger.info('daemon.ready', {
-          watchedPaths: this.config.daemon.watchPaths,
-        });
+        this.logger.info('daemon.ready', { watchedPaths: this.config.daemon.watchPaths });
       });
 
     // Graceful shutdown
@@ -126,7 +136,14 @@ export class WatchDaemon {
     process.on('SIGHUP', () => this.reload());
   }
 
+  // ---------------------------------------------------------------------------
+  // File Change Flow: fs → debounce → gitnexus → canonical → pipeline
+  // ---------------------------------------------------------------------------
+
   private onFileChange(filePath: string): void {
+    if (!this.running) return;
+
+    // Collect raw filesystem changes
     this.pendingFiles.add(filePath);
 
     // Debounce
@@ -142,46 +159,70 @@ export class WatchDaemon {
   private async processChanges(): Promise<void> {
     if (this.pendingFiles.size === 0) return;
 
-    // Run coalescing: skip if a quality gate is already running (Phase 8)
-    if (this.qualityGateLock) {
-      this.logger.debug('daemon.quality.gate.coalesced', {
+    // Run coalescing: skip if pipeline is already running
+    if (this.pipelineRunPromise) {
+      this.logger.debug('daemon.pipeline.coalesced', {
         pendingFiles: this.pendingFiles.size,
       });
       return;
     }
 
-    const files = Array.from(this.pendingFiles);
+    // Collect all pending changes
+    const rawFiles = Array.from(this.pendingFiles);
     this.pendingFiles.clear();
 
-    this.logger.info('daemon.processing.changes', { fileCount: files.length });
+    this.logger.info('daemon.processing.changes', { fileCount: rawFiles.length });
 
-    // Route change intelligence through GitNexus adapter
+    // Create cancellation token for this run
+    this.cancelToken = new CancelToken();
+
+    // Execute pipeline with coalescing
+    this.pipelineRunPromise = this.runPipeline(rawFiles, this.cancelToken)
+      .finally(() => {
+        this.pipelineRunPromise = null;
+        this.cancelToken = null;
+      });
+
+    return this.pipelineRunPromise;
+  }
+
+  /**
+   * Full change processing pipeline:
+   * fs changes → GitNexus resolution → canonical change event → quality gate → secdev → audit
+   */
+  private async runPipeline(rawFiles: string[], cancelToken: CancelToken): Promise<void> {
+    if (cancelToken.isCancelled) return;
+
+    // Step 1: Route through GitNexus for authoritative change intelligence
+    let gitNexusResult: GitNexusResult | null = null;
     if (this.config.tools.gitnexus.enabled) {
       try {
-        // Use raw file paths from chokidar, let GitNexus resolve ownership
-        const gitNexusResult = await this.resolveChangesViaGitNexus(files);
-
-        // Emit GitNexus events
+        gitNexusResult = await this.resolveChangesViaGitNexus(rawFiles);
+        // Emit canonical GitNexus change event
         await this.gitNexus.emitEvents(gitNexusResult);
-
-        // Run quality gate on changed files with SecDev pass
-        await this.runQualityGateWithLock(files);
-
-        this.logger.info('daemon.processing.complete', {
-          fileCount: files.length,
+        this.logger.info('daemon.gitnexus.resolved', {
+          fileCount: gitNexusResult.changedFiles.length,
           packageCount: gitNexusResult.packageNames.length,
         });
       } catch (err) {
         this.logger.error('daemon.gitnexus.error', {
           error: err instanceof Error ? err.message : String(err),
         });
-        // Fallback: run quality gate directly without GitNexus metadata
-        await this.runQualityGateWithLock(files);
+        // Continue without GitNexus metadata
       }
-    } else {
-      // GitNexus disabled — run quality gate directly
-      await this.runQualityGateWithLock(files);
     }
+
+    if (cancelToken.isCancelled) return;
+
+    // Step 2: Run quality gate (prettier + eslint + secdev) through tool queue
+    await this.qualityService.runQualityGate(rawFiles);
+
+    if (cancelToken.isCancelled) return;
+
+    this.logger.info('daemon.pipeline.complete', {
+      fileCount: rawFiles.length,
+      packages: gitNexusResult?.packageNames ?? [],
+    });
   }
 
   /**
@@ -213,26 +254,28 @@ export class WatchDaemon {
     };
   }
 
-  private async runQualityGateWithLock(files: string[]): Promise<void> {
-    this.qualityGateLock = true;
-    try {
-      await this.qualityService.runQualityGate(files);
-    } catch (err) {
-      this.logger.error('daemon.quality.gate.error', {
-        error: err instanceof Error ? err.message : String(err),
-      });
-    } finally {
-      this.qualityGateLock = false;
-    }
-  }
+  // ---------------------------------------------------------------------------
+  // Shutdown with cancellation
+  // ---------------------------------------------------------------------------
 
   async shutdown(reason = 'manual'): Promise<void> {
     this.logger.info('daemon.shutdown', { reason });
     this.running = false;
 
+    // Cancel any running pipeline
+    this.cancelToken?.cancel();
+
+    // Cancel all tool executions
+    this.toolQueue.cancelAll();
+
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
+    }
+
+    // Wait for pipeline to finish
+    if (this.pipelineRunPromise) {
+      await this.pipelineRunPromise;
     }
 
     if (this.watcher) {
@@ -246,13 +289,11 @@ export class WatchDaemon {
 
   private reload(): void {
     this.logger.info('daemon.reload');
-    // In production, reload config and restart watcher
     this.gitNexus.invalidatePackageCache();
+    // In production, reload config and restart watcher
   }
 
-  get isRunning(): boolean {
-    return this.running;
-  }
+  get isRunning(): boolean { return this.running; }
 }
 
 // Factory
@@ -269,12 +310,9 @@ export function createDaemon(_config?: unknown): WatchDaemon {
 async function main(): Promise<void> {
   const daemon = createDaemon();
   await daemon.start();
-
-  // Keep process alive
   await new Promise(() => {});
 }
 
-// Run if executed directly
 if (require.main === module) {
   main().catch((err) => {
     console.error('Daemon failed:', err);

@@ -237,6 +237,19 @@ export type OpenClawEvent =
 export type OpenClawEventKind = OpenClawEvent['kind'];
 
 // ---------------------------------------------------------------------------
+// Event Metadata — observability for every event
+// ---------------------------------------------------------------------------
+
+export interface EventMeta {
+  eventId: string;
+  correlationId?: string;
+  causationId?: string;
+  createdAt: string;
+  processedAt?: string;
+  failedHandlers?: number;
+}
+
+// ---------------------------------------------------------------------------
 // Token Budget
 // ---------------------------------------------------------------------------
 

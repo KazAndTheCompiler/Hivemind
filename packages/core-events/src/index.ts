@@ -1,7 +1,7 @@
 // Typed EventBus with discriminated union event handling
 // Backpressure-safe, with structured failure capture and correlation IDs
 
-import type { OpenClawEvent, OpenClawEventKind } from '@openclaw/core-types';
+import type { OpenClawEvent, OpenClawEventKind, EventMeta } from '@openclaw/core-types';
 import { createLogger, Logger } from '@openclaw/core-logging';
 
 export type EventHandler<T extends OpenClawEvent = OpenClawEvent> = (
@@ -23,6 +23,13 @@ export interface EventProcessingResult {
 const MAX_BUFFER_SIZE = 1000;
 const OVERFLOW_POLICY: 'drop_oldest' | 'reject_new' | 'dead_letter' = 'dead_letter';
 
+/** Generate a unique event ID */
+function generateEventId(): string {
+  const ts = Date.now().toString(36);
+  const rand = Math.random().toString(36).slice(2, 8);
+  return `evt_${ts}_${rand}`;
+}
+
 export class EventBus {
   private handlers = new Map<OpenClawEventKind, Set<EventHandler>>();
   private catchAll = new Set<EventHandler<OpenClawEvent>>();
@@ -30,6 +37,7 @@ export class EventBus {
   private processing = false;
   private logger: Logger;
   private deadLetterHandler?: (event: OpenClawEvent, reason: string) => void | Promise<void>;
+  private eventDeliveryFailedHandler?: (event: OpenClawEvent, meta: EventMeta) => void | Promise<void>;
   private _overflowCount = 0;
   private _totalProcessed = 0;
   private _totalFailures = 0;
@@ -70,6 +78,12 @@ export class EventBus {
     this.deadLetterHandler = handler;
   }
 
+  setEventDeliveryFailedHandler(
+    handler: (event: OpenClawEvent, meta: EventMeta) => void | Promise<void>,
+  ): void {
+    this.eventDeliveryFailedHandler = handler;
+  }
+
   async emit(event: OpenClawEvent): Promise<void> {
     // Backpressure: check buffer capacity
     if (this.buffer.length >= MAX_BUFFER_SIZE) {
@@ -106,6 +120,10 @@ export class EventBus {
     while (this.buffer.length > 0) {
       const event = this.buffer.shift()!;
       const kind = event.kind;
+      const meta: EventMeta = {
+        eventId: generateEventId(),
+        createdAt: new Date().toISOString(),
+      };
 
       const result: EventProcessingResult = {
         event,
@@ -157,6 +175,9 @@ export class EventBus {
         });
       }
 
+      meta.processedAt = new Date().toISOString();
+      meta.failedHandlers = result.failed > 0 ? result.failed : undefined;
+
       this._totalProcessed++;
       if (result.failed > 0) {
         this._totalFailures++;
@@ -166,6 +187,17 @@ export class EventBus {
           failed: result.failed,
           errors: result.errors.slice(0, 5), // cap logged errors
         });
+
+        // Emit delivery failure notification
+        if (this.eventDeliveryFailedHandler) {
+          try {
+            await this.eventDeliveryFailedHandler(event, meta);
+          } catch (err) {
+            this.logger.error('event.delivery_failed_handler.error', {
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
       }
     }
 
