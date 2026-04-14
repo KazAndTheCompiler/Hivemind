@@ -1,0 +1,46 @@
+// Sample automation policy configuration
+// Copy this to automation-policy.json in your project root
+
+{
+  "prettier": {
+    "required": true,
+    "allowedModes": ["changed_file", "checkpoint", "full_repo"],
+    "blockerOnFailure": false,
+    "warnOnFailure": true,
+    "maxRetries": 1,
+    "timeoutMs": 30000
+  },
+  "eslint": {
+    "required": true,
+    "allowedModes": ["changed_file", "checkpoint", "full_repo"],
+    "blockerOnFailure": true,
+    "warnOnFailure": false,
+    "maxRetries": 2,
+    "timeoutMs": 60000
+  },
+  "tsc": {
+    "required": true,
+    "allowedModes": ["changed_file", "checkpoint", "full_repo"],
+    "blockerOnFailure": true,
+    "warnOnFailure": false,
+    "maxRetries": 1,
+    "timeoutMs": 120000
+  },
+  "knip": {
+    "required": true,
+    "allowedModes": ["checkpoint", "full_repo"],
+    "blockerOnFailure": true,
+    "warnOnFailure": false,
+    "maxRetries": 1,
+    "timeoutMs": 180000
+  },
+  "gitnexus": {
+    "required": false,
+    "allowedModes": ["checkpoint"],
+    "blockerOnFailure": false,
+    "warnOnFailure": true,
+    "maxRetries": 0,
+    "timeoutMs": 30000
+  },
+  "failClosed": true
+}

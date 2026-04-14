@@ -8,6 +8,8 @@ packages:
   - 'packages/change-detector'
   - 'packages/audit-store'
   - 'packages/testing'
+  - 'packages/evolution-*'
+  - 'packages/automation-*'
   - 'packages/labs/*'
   - 'packages/tools/*'
   - 'packages/detections/*'

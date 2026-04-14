@@ -1,0 +1,31 @@
+{
+  "name": "@openclaw/automation-cli",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CLI commands for automation enforcement",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "openclaw-automation": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@openclaw/automation-core": "workspace:*",
+    "@openclaw/automation-runner": "workspace:*",
+    "@openclaw/automation-summary": "workspace:*",
+    "@openclaw/automation-audit": "workspace:*",
+    "@openclaw/automation-checkpoints": "workspace:*",
+    "@openclaw/tool-prettier": "workspace:*",
+    "@openclaw/tool-eslint": "workspace:*",
+    "@openclaw/tool-tsc": "workspace:*",
+    "@openclaw/tool-knip": "workspace:*",
+    "@openclaw/core-logging": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.1"
+  }
+}

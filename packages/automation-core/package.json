@@ -1,0 +1,19 @@
+{
+  "name": "@openclaw/automation-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Automation enforcement layer core types, schemas, and domain models",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.1"
+  }
+}
