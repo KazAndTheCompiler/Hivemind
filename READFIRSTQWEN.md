@@ -18,7 +18,7 @@ The full work order lives in `"new work order.ts"` at the repo root.
 
 ## What's Built vs. What's Left
 
-### ✅ COMPLETED (Phases 1–7)
+### ✅ COMPLETED (Phases 1–7 + Hardening)
 
 | Phase | What | Status |
 |-------|------|--------|
@@ -29,6 +29,22 @@ The full work order lives in `"new work order.ts"` at the repo root.
 | 5 | SecDev adapter — security finding detection, severity mapping | ✅ |
 | 6 | Apps — orchestrator (supervisor), daemon (watcher), CLI | ✅ |
 | 7 | Architecture docs + runbooks | ✅ |
+| H | **Hardening pass** — token budgets, path-safe execution, durable persistence, event semantics, config loading, backpressure | ✅ |
+
+### Hardening Pass Summary (10 phases)
+
+| Gap | Fix |
+|-----|-----|
+| Condense pipeline didn't guarantee full payload budget | `truncatePayloadToBudget()` — iteratively trims summary, arrays, findings until serialized JSON fits |
+| Shell-string command execution unsafe | Switched to `child_process.execFile` with arg arrays, cwd isolation, timeout support |
+| Daemon bypassed GitNexus for file changes | All change intelligence now routes through `LocalGitNexusAdapter.resolveFileOwnership()` |
+| Relay events conflated creation + delivery | Split into `relay.condensed` (created), `relay.delivered` (success), `relay.delivery_failed` (error) |
+| EventBus hid handler failures | Structured failure capture: `totalFailures`, `overflowCount`, `capacityUtilization`, dead-letter overflow |
+| Audit/memory were sync-only | `DurableFileAuditStore` (async buffered writes), `DurableFileSink` (index + TTL + flush) |
+| Package ownership was shallow regex | Walk upward to nearest `package.json`, cached via `git ls-files` |
+| Config used brittle require + silent fallback | `fromFile()`, `fromFileOrDefaults()`, `fromDefaults()`, Zod-validated env overrides, `validateStartup()` |
+| No backpressure strategy | Dead-letter overflow policy, quality gate coalescing lock, pending op tracking, graceful shutdown flush |
+| No integration tests for core loop | Tests pass for schemas, tokenizer, config, events, condensing, orchestrator smoke |
 
 ### Build & Test Status
 
@@ -209,13 +225,24 @@ pnpm openclaw status      # show status
 | Gap | Priority |
 |-----|----------|
 | Migrate remaining 70 legacy projects | Medium |
-| Add tests for migrated modules | Medium |
+| Add integration tests for full changed-file loop | Medium |
 | Full token-aware condensing (tiktoken integration) | Low |
 | Real agent-router main-agent delivery (external hook) | Medium |
 | CI/CD pipeline (GitHub Actions) | Low |
 | TypeScript rewrites of high-value Python/Shell scripts | Low |
 
+### Known Gaps After Hardening
+
+1. **Token counting is heuristic-based** — uses whitespace/word ratio, not a real tokenizer. tiktoken integration would improve accuracy.
+2. **SecDev adapter is pattern-matching only** — scans filenames and summary text for keywords. Real static analysis (semgrep, etc.) is a future hook.
+3. **No real external agent integration** — orchestrator processes summaries internally; worker agent handoff is a contract, not wired to actual agents.
+4. **Integration tests are unit-only** — schema, tokenizer, config, and orchestrator smoke tests exist, but no end-to-end daemon → GitNexus → quality gate → audit flow tests.
+5. **No CI/CD pipeline** — build/test/lint are local-only.
+6. **Dead-letter overflow policy is constant** — `OVERFLOW_POLICY` is hardcoded to `dead_letter`. Config-driven policy is future work.
+7. **Durable persistence is file-based** — good for single-node, but distributed deployment would need a real database.
+
 ## Commit History
 
+- `85a1aa4` (2026-04-14) — feat: hardening pass — 10-phase production correction
 - `54cf23e` (2026-04-14) — feat: OpenClaw production scaffold — full agent coordination monorepo
 - Prior — Initial SecDev Labs migration
