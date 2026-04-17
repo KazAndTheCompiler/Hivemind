@@ -1,0 +1,808 @@
+export const OPENCLAW_EVOLUTION_100_POINT_PROMPT = `
+You are evolving an existing production-grade TypeScript monorepo scaffold for an OpenClaw-oriented multi-agent execution system.
+
+This is NOT a rewrite.
+This is NOT a branding pass.
+This is NOT a vague “AI self-improvement” exercise.
+
+This is a disciplined evolution pass.
+
+Your task is to extend the existing system so it can improve itself safely, measurably, and reversibly.
+
+The repo already has:
+- pnpm monorepo structure
+- typed schemas
+- orchestrator / daemon / CLI split
+- event bus
+- GitNexus integration
+- changed-file quality gate
+- prettier/eslint automation
+- SecDev adapter
+- audit persistence
+- memory sink abstraction
+- summary normalization
+- relay condensation
+- 200/300 token main-agent handoff flow
+
+Your job now is to add an EVOLUTION LAYER.
+
+==================================================
+PRIMARY MISSION
+==================================================
+
+Build a production-grade autonomous evolution subsystem that can:
+
+1. observe agent and tool outcomes
+2. learn from failures and successes
+3. persist structured lessons
+4. generate candidate improvements
+5. validate those improvements safely
+6. score their impact
+7. apply or recommend changes in controlled stages
+8. roll back bad mutations
+9. keep a verifiable audit trail
+10. never bypass security, schema, or quality gates
+
+This is not “dreaming” as fantasy.
+This is controlled adaptation under governance.
+
+==================================================
+NON-NEGOTIABLE RULES
+==================================================
+
+- No self-modification without audit.
+- No mutation without validation.
+- No mutation without rollback path.
+- No mutation may bypass prettier/eslint/secdev/tests.
+- No mutation may write directly into critical runtime code without policy checks.
+- No prompt mutation may overwrite the current baseline without version history.
+- No memory entry may be trusted unless validated and typed.
+- No agent can promote its own mutation to production without a separate approval or policy gate.
+- Every candidate improvement must be traceable to evidence.
+- Every applied change must have:
+  - source evidence
+  - proposed rationale
+  - expected outcome
+  - measured result
+  - rollback path
+
+==================================================
+WHAT “EVOLVE IT” MEANS HERE
+==================================================
+
+The system must learn in these domains:
+
+1. AGENT PROMPT EVOLUTION
+- improve worker prompts
+- improve summary prompts
+- improve relay prompts
+- improve recovery prompts
+- improve routing prompts
+
+2. EXECUTION POLICY EVOLUTION
+- retry policy adjustments
+- confidence thresholds
+- routing heuristics
+- tool invocation policy
+- review/escalation policy
+
+3. MEMORY EVOLUTION
+- learn better lesson extraction
+- weight reliable lessons higher
+- decay weak or stale lessons
+- deduplicate memory
+- classify lessons by scope and trust
+
+4. TOOLING EVOLUTION
+- optimize file targeting
+- improve changed-file heuristics
+- refine secdev trigger policy
+- refine quality gate aggregation
+
+5. ORCHESTRATION EVOLUTION
+- improve task decomposition hints
+- improve agent selection
+- improve blocker escalation
+- improve failure handling pathways
+
+Do NOT implement free-form uncontrolled self-editing.
+Implement constrained evolution.
+
+==================================================
+TOP-LEVEL ARCHITECTURE TO ADD
+==================================================
+
+Add packages or equivalent modules for:
+
+/packages
+  /evolution-core
+  /evolution-policy
+  /evolution-memory
+  /evolution-scoring
+  /evolution-mutation
+  /evolution-validator
+  /evolution-rollout
+  /evolution-registry
+  /evolution-replay
+  /prompt-registry
+  /prompt-versioning
+  /policy-registry
+  /policy-versioning
+  /metrics-core
+  /health-core
+
+You may merge some packages if the existing repo structure makes that clearly better, but all responsibilities must exist.
+
+==================================================
+NEW CORE CAPABILITIES
+==================================================
+
+Implement these capabilities:
+
+1. OBSERVATION
+Collect evidence from:
+- task completion outcomes
+- failed tasks
+- retries
+- relay quality
+- secdev findings
+- quality gate results
+- delivery failures
+- manual overrides
+- rollback events
+- review queue outcomes
+
+2. LESSON EXTRACTION
+Turn observations into typed lessons:
+- what failed
+- probable cause
+- proposed improvement
+- confidence
+- scope
+- expiry/decay
+- evidence refs
+
+3. CANDIDATE GENERATION
+Generate candidate mutations to:
+- prompts
+- routing policies
+- retry policies
+- thresholds
+- scoring weights
+- task templates
+
+4. VALIDATION
+Before any mutation can advance:
+- schema validation
+- policy validation
+- sandbox test run
+- quality gate pass
+- secdev pass
+- regression comparison
+- audit logging
+
+5. SCORING
+Score candidates on:
+- success rate delta
+- failure reduction
+- security impact
+- complexity cost
+- regression risk
+- confidence of evidence
+- reversibility
+
+6. ROLLOUT
+Support staged promotion:
+- draft
+- experimental
+- canary
+- active
+- rolled_back
+- rejected
+
+7. ROLLBACK
+Any failed evolution must be revertible.
+
+8. REPLAY
+System must be able to replay observations and re-score mutations.
+
+==================================================
+REQUIRED DOMAIN MODELS
+==================================================
+
+Implement strict TypeScript + runtime schemas for:
+
+type EvolutionScope =
+  | "prompt"
+  | "routing_policy"
+  | "retry_policy"
+  | "threshold"
+  | "memory_rule"
+  | "tool_policy"
+  | "task_template";
+
+type EvolutionStage =
+  | "draft"
+  | "experimental"
+  | "canary"
+  | "active"
+  | "rolled_back"
+  | "rejected";
+
+type EvidenceKind =
+  | "task_outcome"
+  | "quality_gate"
+  | "secdev_finding"
+  | "relay_delivery"
+  | "manual_review"
+  | "rollback_event"
+  | "memory_feedback";
+
+interface EvidenceRef {
+  id: string;
+  kind: EvidenceKind;
+  timestamp: string;
+  taskId?: string;
+  agentId?: string;
+  summary?: string;
+  refs?: string[];
+}
+
+interface ExtractedLesson {
+  id: string;
+  scope: EvolutionScope;
+  title: string;
+  problem: string;
+  hypothesis: string;
+  recommendedChange: string;
+  confidence: number;
+  priority: "low" | "medium" | "high" | "critical";
+  evidence: EvidenceRef[];
+  tags: string[];
+  expiresAt?: string;
+  createdAt: string;
+  sourceVersion: string;
+}
+
+interface MutationCandidate {
+  id: string;
+  scope: EvolutionScope;
+  targetId: string;
+  baseVersion: string;
+  proposedVersion: string;
+  rationale: string;
+  patch: unknown;
+  expectedOutcome: string;
+  risk: "low" | "medium" | "high" | "critical";
+  evidence: EvidenceRef[];
+  createdAt: string;
+}
+
+interface ValidationResult {
+  candidateId: string;
+  schemaValid: boolean;
+  policyValid: boolean;
+  testsPassed: boolean;
+  qualityGatePassed: boolean;
+  secdevPassed: boolean;
+  regressionsDetected: boolean;
+  notes: string[];
+  timestamp: string;
+}
+
+interface EvolutionScore {
+  candidateId: string;
+  successDelta: number;
+  failureReduction: number;
+  securityScore: number;
+  regressionRisk: number;
+  complexityCost: number;
+  confidenceScore: number;
+  overallScore: number;
+  timestamp: string;
+}
+
+interface RolloutDecision {
+  candidateId: string;
+  stage: EvolutionStage;
+  approved: boolean;
+  reason: string;
+  timestamp: string;
+}
+
+interface PromptVersion {
+  promptId: string;
+  version: string;
+  content: string;
+  checksum: string;
+  createdAt: string;
+  createdFromVersion?: string;
+  status: "draft" | "active" | "archived";
+}
+
+interface PolicyVersion {
+  policyId: string;
+  version: string;
+  config: Record<string, unknown>;
+  checksum: string;
+  createdAt: string;
+  createdFromVersion?: string;
+  status: "draft" | "active" | "archived";
+}
+
+==================================================
+KEY SERVICES TO IMPLEMENT
+==================================================
+
+Implement these services:
+
+- ObservationIngestService
+- LessonExtractionService
+- EvolutionMemoryService
+- CandidateGenerationService
+- MutationRegistryService
+- PromptRegistryService
+- PolicyRegistryService
+- CandidateValidationService
+- EvolutionScoringService
+- RolloutDecisionService
+- RolloutExecutorService
+- RollbackService
+- EvolutionReplayService
+- EvolutionHealthService
+- EvolutionMetricsService
+
+==================================================
+REQUIRED EVENT FLOW
+==================================================
+
+Add typed events for:
+
+- evolution.observation.ingested
+- evolution.lesson.extracted
+- evolution.candidate.created
+- evolution.candidate.validated
+- evolution.candidate.scored
+- evolution.candidate.promoted
+- evolution.candidate.rejected
+- evolution.candidate.rolled_back
+- evolution.rollout.started
+- evolution.rollout.completed
+- evolution.rollback.completed
+- evolution.memory.updated
+
+One event kind must have one meaning only.
+Use versioned payloads.
+Attach:
+- eventId
+- correlationId
+- causationId
+- sequence
+- timestamp
+
+==================================================
+100-POINT IMPLEMENTATION OBJECTIVES
+==================================================
+
+1. Add an evolution-core package with public types and service contracts.
+2. Add Zod schemas for all new evolution domain models.
+3. Add version fields to all evolution payloads.
+4. Add an observation ingest pipeline for task outcomes and tool results.
+5. Ingest quality gate results as evolution evidence.
+6. Ingest SecDev findings as evolution evidence.
+7. Ingest relay failures as evolution evidence.
+8. Ingest manual review outcomes as evolution evidence.
+9. Normalize all evidence into a canonical EvidenceRef shape.
+10. Persist observations durably.
+
+11. Build LessonExtractionService with deterministic extraction rules.
+12. Convert repeated failures into candidate lessons.
+13. Extract prompt-quality lessons from poor relay outcomes.
+14. Extract tooling lessons from repeated lint/format/secdev failures.
+15. Extract routing lessons from task reroute patterns.
+16. Extract retry-policy lessons from repeated retry outcomes.
+17. Deduplicate lessons by normalized signature.
+18. Add confidence scoring to extracted lessons.
+19. Add lesson expiry/decay support.
+20. Persist extracted lessons durably.
+
+21. Build an evolution-memory package.
+22. Separate short-lived lessons from long-lived lessons.
+23. Add lesson trust weighting.
+24. Add source-evidence counting.
+25. Add stale lesson decay.
+26. Add manual lesson suppression capability.
+27. Add lesson tagging by subsystem.
+28. Add scope filtering by prompt/policy/tool/memory/routing.
+29. Add lesson retrieval APIs.
+30. Add lesson query tests.
+
+31. Build a prompt-registry package.
+32. Store prompts as versioned artifacts.
+33. Track active vs draft vs archived prompt versions.
+34. Compute prompt checksums.
+35. Preserve prompt lineage from parent version.
+36. Add prompt lookup by id + version.
+37. Add prompt diff support.
+38. Prevent in-place destructive overwrites.
+39. Add prompt validation boundaries.
+40. Add prompt registry tests.
+
+41. Build a policy-registry package.
+42. Store retry/routing/threshold/tool policies as versioned config artifacts.
+43. Preserve policy lineage.
+44. Add active/draft/archived states.
+45. Validate policy config with schemas.
+46. Support policy diffing.
+47. Add policy lookup APIs.
+48. Prevent invalid policy activation.
+49. Add policy rollback support.
+50. Add policy registry tests.
+
+51. Build CandidateGenerationService.
+52. Generate prompt mutations from extracted lessons.
+53. Generate routing-policy mutations from extracted lessons.
+54. Generate threshold mutations from extracted lessons.
+55. Generate retry-policy mutations from extracted lessons.
+56. Keep mutation patch format typed and explicit.
+57. Each candidate must cite evidence.
+58. Each candidate must state expected outcome.
+59. Each candidate must state risk level.
+60. Persist mutation candidates durably.
+
+61. Build CandidateValidationService.
+62. Validate candidate patch schema.
+63. Validate mutation target exists.
+64. Validate baseVersion matches current lineage expectations.
+65. Run candidate through sandbox evaluation path.
+66. Run unit/integration tests before promotion.
+67. Run prettier/eslint on mutation-affected files if code/policy touched.
+68. Run SecDev checks for relevant scopes.
+69. Reject candidates that regress baseline metrics.
+70. Persist validation results.
+
+71. Build EvolutionScoringService.
+72. Score candidates against baseline.
+73. Include success delta in scoring.
+74. Include failure reduction in scoring.
+75. Include security impact in scoring.
+76. Include regression risk in scoring.
+77. Include complexity cost in scoring.
+78. Include evidence confidence in scoring.
+79. Compute overall score deterministically.
+80. Persist scores and compare candidate cohorts.
+
+81. Build RolloutDecisionService.
+82. Add rollout stages: draft, experimental, canary, active, rolled_back, rejected.
+83. Prevent direct promotion from draft to active unless policy explicitly allows it.
+84. Require successful validation before promotion.
+85. Require scoring before promotion.
+86. Add approval policy hooks.
+87. Support manual approval mode and policy-driven auto-approval mode.
+88. Persist rollout decisions.
+89. Emit candidate promoted/rejected events.
+90. Add rollout decision tests.
+
+91. Build RolloutExecutorService.
+92. Activate prompt versions safely.
+93. Activate policy versions safely.
+94. Keep baseline version pinned for rollback.
+95. Add canary rollout support for limited scope.
+96. Record measured rollout outcomes.
+97. Auto-rollback on severe negative signals.
+98. Build RollbackService for prompt and policy versions.
+99. Build EvolutionReplayService to replay evidence and re-score past candidates.
+100. Add end-to-end integration tests proving observe -> learn -> mutate -> validate -> score -> rollout -> rollback.
+
+==================================================
+CONSTRAINTS ON SELF-EVOLUTION
+==================================================
+
+The system must NOT:
+- rewrite arbitrary repo code without typed mutation contracts
+- mutate security boundaries automatically
+- mutate schema validators automatically without strict approval
+- disable tests, lint, prettier, secdev, or audit
+- delete audit history
+- promote candidates based on a single weak observation
+- apply prompt changes without versioning
+- apply policy changes without versioning
+- silently replace active configuration
+
+The system MAY:
+- propose prompt variants
+- propose threshold changes
+- propose retry/routing policy improvements
+- propose memory weighting changes
+- propose tool trigger heuristics
+- promote low-risk validated variants under policy
+
+==================================================
+PROMPT EVOLUTION RULES
+==================================================
+
+Prompt evolution must be conservative and typed.
+
+Add prompt mutation schema support for:
+- instruction block change
+- constraint block change
+- output-format change
+- retry guidance change
+- tool-usage guidance change
+
+Every prompt mutation must:
+- reference a promptId
+- reference baseVersion
+- produce proposedVersion
+- preserve non-negotiable safety/quality sections
+- pass validation rules
+- store exact content checksum
+
+Do not allow free-form “replace entire prompt with whatever”.
+
+==================================================
+POLICY EVOLUTION RULES
+==================================================
+
+Policies that may evolve:
+- retry policy
+- confidence thresholds
+- review threshold
+- relay confidence gating
+- tool execution trigger thresholds
+- lesson decay parameters
+- rollout approval thresholds
+
+Policies that may NOT auto-evolve without manual approval:
+- secdev bypass logic
+- audit persistence disabling
+- schema validation disabling
+- hard security thresholds
+- privileged execution rules
+
+==================================================
+OBSERVATION SOURCES
+==================================================
+
+Use these data sources for evolution evidence:
+- task success/failure outcomes
+- number of retries
+- blocker frequency
+- relay delivery success/failure
+- confidence vs actual outcome mismatch
+- secdev findings by severity
+- quality gate failures
+- manual review corrections
+- rollback-triggering regressions
+- canary rollout results
+
+Add an ingestion contract for each.
+
+==================================================
+SCORING MODEL
+==================================================
+
+Implement a deterministic scoring model such as:
+
+overallScore =
+  (successDelta * weightSuccess)
+  + (failureReduction * weightFailureReduction)
+  + (securityScore * weightSecurity)
+  + (confidenceScore * weightConfidence)
+  - (regressionRisk * weightRegression)
+  - (complexityCost * weightComplexity)
+
+Weights must be configurable and validated.
+
+Add:
+- baseline score comparison
+- candidate cohort ranking
+- tie-breaker policy
+- minimum score thresholds for promotion
+
+==================================================
+ROLLOUT SAFETY
+==================================================
+
+Implement safe rollout rules:
+
+- draft: candidate exists but inactive
+- experimental: candidate may run in isolated evaluation
+- canary: candidate is active for limited subset or policy branch
+- active: promoted as baseline
+- rolled_back: reverted after negative signals
+- rejected: failed validation, scoring, or approval
+
+Add:
+- canary duration/config
+- negative signal thresholds
+- automatic rollback trigger
+- rollback audit event
+- post-rollout evaluation window
+
+==================================================
+MEMORY EVOLUTION
+==================================================
+
+Evolution memory is not generic chat memory.
+It is system-operational learning memory.
+
+Implement:
+- typed lessons
+- evidence-weighted trust
+- decay over time
+- invalidation on contradictory evidence
+- lesson retrieval by subsystem and scope
+- lesson-to-candidate traceability
+- manual pin / suppress / archive controls
+
+==================================================
+METRICS + HEALTH
+==================================================
+
+Add minimal metrics and health outputs for evolution layer:
+
+metrics:
+- observations_ingested_total
+- lessons_extracted_total
+- candidates_created_total
+- candidates_validated_total
+- candidates_promoted_total
+- candidates_rejected_total
+- rollbacks_total
+- canary_failures_total
+- prompt_versions_total
+- policy_versions_total
+
+health:
+- evolution queue depth
+- last successful validation time
+- last rollout time
+- pending candidates
+- stale lessons count
+- replay consistency status
+
+==================================================
+QUEUEING + BACKPRESSURE
+==================================================
+
+Evolution processing must not be unbounded.
+
+Add:
+- bounded observation queue
+- bounded candidate validation queue
+- explicit overflow policy
+- coalescing for repeated identical observations
+- concurrency caps for validation runs
+- no overlapping rollout for the same targetId
+- graceful shutdown semantics
+
+==================================================
+REPLAY + DETERMINISM
+==================================================
+
+Implement replay support.
+
+Requirements:
+- replay evidence from persisted records
+- rebuild lessons from evidence
+- rebuild candidate scores from stored baselines
+- compare replayed result to recorded result
+- surface divergence
+
+Add CLI support such as:
+- replay evidence
+- inspect candidate lineage
+- inspect prompt version history
+- inspect policy version history
+- inspect rollback reasons
+
+==================================================
+TEST REQUIREMENTS
+==================================================
+
+Add strong tests.
+
+UNIT TESTS
+- evidence normalization
+- lesson extraction
+- lesson deduplication
+- lesson decay
+- candidate generation
+- prompt versioning
+- policy versioning
+- scoring math
+- rollout rules
+- rollback logic
+
+INTEGRATION TESTS
+- task failures produce lessons
+- lessons produce mutation candidates
+- prompt candidate validates and versions correctly
+- policy candidate validates and versions correctly
+- candidate scoring rejects risky weak candidates
+- canary rollout records outcomes
+- rollback restores previous active version
+- replay rebuilds prior results
+- contradictory evidence downgrades lessons
+- manual review feedback changes lesson trust
+
+SMOKE TESTS
+- evolution services boot
+- registry services boot
+- rollout services boot
+- CLI introspection commands work
+
+==================================================
+FILE-BY-FILE IMPLEMENTATION PRIORITY
+==================================================
+
+Implement in this order:
+
+PHASE 1
+- add core types/schemas/events for evolution
+- add registries for prompt + policy versioning
+
+PHASE 2
+- add observation ingest
+- add lesson extraction
+- add evolution memory persistence
+
+PHASE 3
+- add candidate generation
+- add candidate validation
+- add scoring
+
+PHASE 4
+- add rollout decision + execution
+- add rollback
+
+PHASE 5
+- add replay + metrics + health
+- add CLI/admin surfaces
+- add docs and tests
+
+==================================================
+OUTPUT FORMAT
+==================================================
+
+Return the result in this order:
+
+1. EVOLUTION SUMMARY
+2. REPO TREE CHANGES
+3. FILE-BY-FILE PATCH PLAN
+4. KEY TYPE DEFINITIONS
+5. KEY SERVICE IMPLEMENTATIONS
+6. REGISTRY DESIGN
+7. VALIDATION + SCORING DESIGN
+8. ROLLOUT + ROLLBACK DESIGN
+9. TEST PLAN
+10. DOC UPDATES
+11. REMAINING GAPS
+12. ACTUAL CODE
+
+The ACTUAL CODE section must contain real TypeScript for the critical files.
+Do not stop at a plan.
+Do not produce pseudo-code only.
+
+==================================================
+QUALITY BAR
+==================================================
+
+Before finalizing, self-check:
+
+- Can the system explain why it learned something?
+- Can it trace lessons to evidence?
+- Can it version prompt/policy mutations safely?
+- Can it reject bad candidates deterministically?
+- Can it roll back safely?
+- Can it replay and re-score?
+- Can it operate without bypassing security and quality gates?
+- Is every mutation auditable?
+- Is every promotion reversible?
+- Are tests proving the core evolution loop?
+
+If any answer is no, keep fixing.
+
+Now implement the evolution layer in real TypeScript code.
+`;

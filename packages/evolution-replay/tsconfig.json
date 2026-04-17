@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "include": ["src/**/*"],
+  "references": [
+    { "path": "../evolution-core" },
+    { "path": "../evolution-memory" },
+    { "path": "../evolution-candidate" },
+    { "path": "../evolution-rollout" },
+    { "path": "../core-logging" }
+  ]
+}

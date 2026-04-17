@@ -1,0 +1,559 @@
+export const OPENCLAW_AUTOMATION_ENFORCEMENT_FOLLOWON_PROMPT = `
+You are continuing work on an existing production-grade TypeScript monorepo scaffold for an OpenClaw-oriented multi-agent execution system.
+
+This is a FOLLOW-ON IMPLEMENTATION PASS.
+Do NOT rewrite the repo.
+Do NOT replace the evolution layer.
+Do NOT re-argue architecture already decided.
+
+Assume the repo already contains:
+- GitNexus integration
+- changed-file quality gate concepts
+- prettier/eslint automation or placeholders
+- summary normalization
+- 200/300 token handoff flow
+- audit persistence
+- evolution-oriented governance work already in progress
+
+Your task now is to add a strict AUTOMATION ENFORCEMENT LAYER so even smaller LLMs stay on target.
+
+==================================================
+PRIMARY MISSION
+==================================================
+
+Implement a production-grade automation layer that:
+
+1. runs deterministic enforcement on code changes
+2. keeps weak/small models aligned through hard feedback loops
+3. separates “agent generation” from “tool judgment”
+4. validates changed files quickly
+5. validates the full repo at checkpoints
+6. produces compact structured summaries for the main agent
+7. blocks forward progress on failed gates
+8. records all enforcement outcomes in typed audit events
+9. integrates with GitNexus as the context engine
+10. remains fast, incremental, and reversible
+
+This is not “more linting.”
+This is an execution-governance layer.
+
+==================================================
+NON-NEGOTIABLE RULES
+==================================================
+
+- The agent may generate code, but tools decide whether the code is acceptable.
+- No failed enforcement step may be silently ignored.
+- No change may be considered complete unless required gates pass.
+- The automation layer must support both changed-file mode and full-repo mode.
+- Fast-loop checks must be optimized for iteration speed.
+- Slow-loop checks must be optimized for repo hygiene and drift control.
+- All tool outputs must be normalized into typed result objects.
+- GitNexus summaries must be condensed into structured agent-readable outputs.
+- Enforcement outcomes must be auditable.
+- The automation layer must be able to fail closed.
+
+==================================================
+WHAT YOU ARE IMPLEMENTING
+==================================================
+
+Build an AUTOMATION ENFORCEMENT LAYER around these five tools/responsibilities:
+
+1. PRETTIER
+- normalize formatting
+- reduce noisy diffs
+- make output stable across model runs
+
+2. ESLINT
+- catch invalid patterns
+- enforce architectural and style constraints
+- support changed-file execution
+
+3. TSC
+- run typechecking in noEmit mode
+- support incremental and project-aware validation
+- block broken contracts fast
+
+4. KNIP
+- detect unused files
+- detect unused exports
+- detect unused dependencies
+- detect stale code paths and dead config
+
+5. GITNEXUS
+- provide codebase understanding
+- provide hotspot/context summaries
+- provide agent-facing condensed repo state
+- operate as a read/context engine, not a formatter/linter substitute
+
+==================================================
+TOP-LEVEL DESIGN INTENT
+==================================================
+
+The automation layer must split into:
+
+FAST LOOP
+- runs on changed files or local affected scope
+- used after agent edits
+- must be cheap and frequent
+
+SLOW LOOP
+- runs at checkpoints / milestones / branch gates
+- includes broader hygiene scans
+- catches drift and repo rot
+
+The intended loop is:
+
+agent changes code
+-> fast enforcement runs
+-> failures are normalized
+-> agent fixes failures
+-> checkpoint triggers slow enforcement
+-> GitNexus emits structured summary
+-> summary is condensed to 200/300 token schema
+-> main agent receives updated repo state
+
+==================================================
+ARCHITECTURE TO ADD
+==================================================
+
+Add packages or equivalent modules for responsibilities such as:
+
+/packages
+  /automation-core
+  /automation-runner
+  /automation-policy
+  /automation-results
+  /automation-audit
+  /automation-summary
+  /automation-checkpoints
+  /tool-prettier
+  /tool-eslint
+  /tool-tsc
+  /tool-knip
+  /tool-gitnexus
+
+You may merge some packages if the existing repo structure makes that clearly better, but all responsibilities must exist.
+
+==================================================
+REQUIRED CAPABILITIES
+==================================================
+
+1. TOOL EXECUTION ADAPTERS
+Create typed adapters for:
+- prettier
+- eslint
+- tsc
+- knip
+- gitnexus
+
+Each adapter must support:
+- command construction
+- scoped execution
+- timeout handling
+- exit-code normalization
+- stdout/stderr capture
+- structured result mapping
+- audit event emission
+
+2. EXECUTION MODES
+Support at least:
+
+CHANGED_FILE_MODE
+- only run checks relevant to changed files / affected packages
+- optimized for rapid feedback
+
+CHECKPOINT_MODE
+- run broader repo validations
+- include full-repo hygiene scans
+- used after X edits, milestone completion, branch gate, or manual trigger
+
+FULL_REPO_MODE
+- explicit full validation pass
+- suitable for release candidate / hard gate
+
+3. ENFORCEMENT POLICY
+Implement policy rules such as:
+- prettier/eslint/tsc required on changed code paths
+- knip required at checkpoint or full-repo stage
+- gitnexus summary required after checkpoint
+- agent cannot continue if blocking checks fail
+- warnings may be recorded separately from blockers
+- retry policy for flaky execution must be bounded and auditable
+
+4. RESULT NORMALIZATION
+Every tool result must normalize into typed shapes like:
+- tool name
+- execution scope
+- target files/packages
+- duration
+- exit status
+- blocker vs warning classification
+- machine-readable issues
+- human-readable summary
+- evidence refs
+- retry count
+
+5. AGENT FEEDBACK CONDENSATION
+Create summarizers that convert tool output into:
+- detailed enforcement result
+- compact agent repair instructions
+- 200-token summary schema
+- 300-token richer checkpoint summary schema
+
+The condensed summary must answer:
+- what failed
+- where it failed
+- what is blocking progress
+- what the model should fix next
+- what was skipped
+- whether the repo is converging or drifting
+
+6. GITNEXUS INTEGRATION
+Implement GitNexus as:
+- a codebase understanding source
+- a hotspot/context summarizer
+- a changed-area context helper
+- a checkpoint summary contributor
+
+Do NOT treat GitNexus as a gate equivalent to eslint/tsc.
+It is a context engine and drift-reduction mechanism.
+
+7. CHECKPOINT ORCHESTRATION
+Implement checkpoint logic that can:
+- trigger after N mutations
+- trigger after milestone completion
+- trigger on manual command
+- trigger before promotion/canary/merge
+- run slow-loop validations
+- emit condensed state back to the main agent
+
+8. AUDIT + OBSERVABILITY
+Persist:
+- tool execution events
+- failures
+- retries
+- skipped checks
+- policy decisions
+- checkpoint summaries
+- GitNexus summary lineage
+- per-run convergence/drift indicators
+
+==================================================
+REQUIRED DOMAIN MODELS
+==================================================
+
+Implement strict TypeScript + runtime schemas for concepts such as:
+
+type AutomationMode =
+  | "changed_file"
+  | "checkpoint"
+  | "full_repo";
+
+type ToolName =
+  | "prettier"
+  | "eslint"
+  | "tsc"
+  | "knip"
+  | "gitnexus";
+
+type EnforcementSeverity =
+  | "info"
+  | "warning"
+  | "blocker";
+
+type EnforcementStatus =
+  | "passed"
+  | "failed"
+  | "partial"
+  | "skipped"
+  | "timed_out";
+
+type ToolExecutionTarget = {
+  files: string[];
+  packages: string[];
+  patterns: string[];
+};
+
+type ToolIssue = {
+  tool: ToolName;
+  severity: EnforcementSeverity;
+  ruleId?: string;
+  file?: string;
+  message: string;
+  line?: number;
+  column?: number;
+  symbol?: string;
+  suggestion?: string;
+};
+
+type ToolExecutionResult = {
+  tool: ToolName;
+  mode: AutomationMode;
+  status: EnforcementStatus;
+  durationMs: number;
+  exitCode: number | null;
+  target: ToolExecutionTarget;
+  blockerCount: number;
+  warningCount: number;
+  issues: ToolIssue[];
+  stdout?: string;
+  stderr?: string;
+  retryCount: number;
+  timestamp: string;
+};
+
+type EnforcementDecision = {
+  canProceed: boolean;
+  blockingTools: ToolName[];
+  warningTools: ToolName[];
+  rationale: string;
+};
+
+type CondensedAgentSummary = {
+  mode: AutomationMode;
+  repoState: "stable" | "repairing" | "drifting";
+  blockers: string[];
+  warnings: string[];
+  nextActions: string[];
+  touchedAreas: string[];
+  tokenBudget: 200 | 300;
+};
+
+type GitNexusContextSummary = {
+  touchedAreas: string[];
+  hotspots: string[];
+  architecturalNotes: string[];
+  suspectedRisks: string[];
+  summary: string;
+};
+
+==================================================
+REQUIRED EVENT FLOW
+==================================================
+
+Implement event flow like:
+
+1. agent edits files
+2. changed-file detector resolves scope
+3. fast-loop tool plan is built
+4. prettier adapter runs
+5. eslint adapter runs
+6. tsc adapter runs
+7. results normalize into typed structures
+8. enforcement policy decides proceed vs repair
+9. compact repair summary is emitted
+10. agent fixes blockers
+11. checkpoint trigger fires later
+12. slow-loop runs knip + broader validations
+13. gitnexus builds context summary
+14. summary condensation emits 200/300 token handoff
+15. audit trail persists entire cycle
+
+==================================================
+100-POINT IMPLEMENTATION OBJECTIVES
+==================================================
+
+1. Add automation-core package or equivalent.
+2. Add automation-runner orchestration service.
+3. Add automation-policy module.
+4. Add automation-results normalization layer.
+5. Add automation-summary module.
+6. Add automation-audit persistence integration.
+7. Add checkpoint trigger service.
+8. Add prettier adapter.
+9. Add eslint adapter.
+10. Add tsc adapter.
+11. Add knip adapter.
+12. Add gitnexus adapter.
+13. Add typed command config model for all tools.
+14. Add execution timeout policy.
+15. Add retry policy with bounded attempts.
+16. Add changed-file scope resolver.
+17. Add affected-package resolver if monorepo-aware.
+18. Add tool execution target builder.
+19. Add machine-readable issue normalization for prettier.
+20. Add machine-readable issue normalization for eslint.
+21. Add machine-readable issue normalization for tsc.
+22. Add machine-readable issue normalization for knip.
+23. Add structured summary normalization for gitnexus.
+24. Add blocker vs warning classification rules.
+25. Add fail-closed enforcement decision logic.
+26. Add skip-policy rules with audit logging.
+27. Add fast-loop pipeline.
+28. Add slow-loop pipeline.
+29. Add full-repo pipeline.
+30. Add checkpoint scheduler or trigger abstraction.
+31. Add per-tool duration metrics.
+32. Add per-run convergence/drift indicator.
+33. Add audit events for tool start/end.
+34. Add audit events for retries.
+35. Add audit events for skips.
+36. Add audit events for failures.
+37. Add audit events for checkpoint summaries.
+38. Add compact repair prompt builder.
+39. Add 200-token handoff summarizer.
+40. Add 300-token handoff summarizer.
+41. Add touched-area summary extraction.
+42. Add hotspot extraction from GitNexus.
+43. Add architectural risk notes from GitNexus.
+44. Add changed-file command optimization for prettier.
+45. Add changed-file command optimization for eslint.
+46. Add changed-file command optimization for tsc where possible.
+47. Add checkpoint/full mode command construction for knip.
+48. Add GitNexus checkpoint scan integration.
+49. Add config-driven tool enabling/disabling.
+50. Add policy-driven required tool sets per mode.
+51. Add support for repo-level defaults.
+52. Add support for package-level overrides if appropriate.
+53. Add CLI command: run automation fast-loop.
+54. Add CLI command: run automation checkpoint.
+55. Add CLI command: run automation full-repo.
+56. Add CLI command: inspect last automation run.
+57. Add CLI command: inspect last checkpoint summary.
+58. Add CLI command: inspect GitNexus summary lineage.
+59. Add CLI command: inspect blocking issues only.
+60. Add CLI command: emit condensed main-agent summary.
+61. Add test fixtures for passing runs.
+62. Add test fixtures for prettier failures.
+63. Add test fixtures for eslint failures.
+64. Add test fixtures for tsc failures.
+65. Add test fixtures for knip findings.
+66. Add test fixtures for gitnexus summaries.
+67. Add unit tests for scope resolution.
+68. Add unit tests for adapter normalization.
+69. Add unit tests for enforcement decision logic.
+70. Add unit tests for repair-summary condensation.
+71. Add unit tests for 200-token summaries.
+72. Add unit tests for 300-token summaries.
+73. Add unit tests for checkpoint triggers.
+74. Add integration test: changed-file run blocks on eslint.
+75. Add integration test: changed-file run blocks on tsc.
+76. Add integration test: checkpoint run includes knip.
+77. Add integration test: checkpoint run emits GitNexus summary.
+78. Add integration test: condensed summary feeds main-agent schema.
+79. Add integration test: retries are bounded and audited.
+80. Add integration test: skipped tools are recorded.
+81. Add integration test: repo state becomes stable after fixes.
+82. Add integration test: repo state marked drifting on repeated failures.
+83. Add docs for automation modes.
+84. Add docs for enforcement policy.
+85. Add docs for adapter design.
+86. Add docs for checkpoint lifecycle.
+87. Add docs for GitNexus role and boundaries.
+88. Add docs for condensed summary schemas.
+89. Add docs for local developer commands.
+90. Add docs for CI usage.
+91. Add workspace scripts for fast-loop.
+92. Add workspace scripts for checkpoint.
+93. Add workspace scripts for full-repo validation.
+94. Add workspace scripts for condensed summary emission.
+95. Add sample config file for automation policies.
+96. Add sample audit output.
+97. Add sample checkpoint summary output.
+98. Ensure code is typed strictly.
+99. Ensure runtime schemas validate untrusted tool outputs.
+100. Ensure the entire layer integrates cleanly with the existing evolution/governance architecture.
+
+==================================================
+IMPLEMENTATION REQUIREMENTS
+==================================================
+
+Implement real code for:
+- tool adapters
+- automation orchestrator
+- enforcement policy evaluator
+- summary condenser
+- audit event shapes
+- CLI commands
+- scripts/config wiring
+- tests for critical paths
+
+Do not stop at prose.
+Do not stop at architecture.
+Do not produce pseudo-code only.
+
+==================================================
+SCRIPTS / PACKAGE JSON EXPECTATIONS
+==================================================
+
+Add scripts or equivalent workspace tasks such as:
+
+- format
+- lint
+- typecheck
+- knip
+- automation:fast
+- automation:checkpoint
+- automation:full
+- automation:summary
+
+If the repo uses pnpm, wire them properly for the monorepo.
+If package-level scripts are needed, add them carefully and consistently.
+
+==================================================
+CI / AUTOMATION EXPECTATIONS
+==================================================
+
+Design the layer so it can plug into CI, local dev loops, and agentic execution.
+
+Expected behavior:
+
+FAST LOOP
+- run after agent-generated edits
+- fast failure feedback
+- repair summary emitted immediately
+
+CHECKPOINT LOOP
+- run after milestone / N edits / promotion boundary
+- include knip
+- include GitNexus context summary
+- emit 300-token main-agent summary
+
+FULL REPO LOOP
+- run before release candidate / merge / promotion
+- broad validation
+- fail closed on blockers
+
+==================================================
+QUALITY BAR
+==================================================
+
+Before finalizing, self-check:
+
+- Can a small model tell exactly what to fix next?
+- Are tool outputs normalized instead of dumped raw?
+- Is the difference between fast-loop and slow-loop explicit?
+- Does knip run at the right stage instead of constantly?
+- Is GitNexus used as a context engine rather than confused with gates?
+- Can failed checks block forward progress deterministically?
+- Are summaries compact enough for weak models?
+- Are audits complete enough for replay and review?
+- Does this integrate with the existing evolution layer instead of fighting it?
+
+If any answer is no, keep fixing.
+
+==================================================
+OUTPUT FORMAT
+==================================================
+
+Return the result in this order:
+
+1. AUTOMATION ENFORCEMENT SUMMARY
+2. REPO TREE CHANGES
+3. FILE-BY-FILE PATCH PLAN
+4. KEY TYPE DEFINITIONS
+5. TOOL ADAPTER IMPLEMENTATIONS
+6. AUTOMATION ORCHESTRATOR
+7. ENFORCEMENT POLICY LOGIC
+8. SUMMARY CONDENSATION DESIGN
+9. GITNEXUS INTEGRATION DESIGN
+10. CLI / SCRIPT WIRING
+11. TEST PLAN
+12. DOC UPDATES
+13. REMAINING GAPS
+14. ACTUAL CODE
+
+The ACTUAL CODE section must contain real TypeScript for the critical files.
+
+Now implement the automation enforcement layer in real TypeScript code as a follow-on to the existing evolution scaffold.
+`;
