@@ -30,6 +30,7 @@ export class WatchDaemon {
   private gitNexus: LocalGitNexusAdapter;
   private toolQueue: ToolExecutionQueue;
   private running = false;
+  private startTime = Date.now();
   private pipelineRunPromise: Promise<void> | null = null; // Run coalescing
   private cancelToken: CancelToken | null = null; // Cancellation support
 
@@ -294,6 +295,46 @@ export class WatchDaemon {
   }
 
   get isRunning(): boolean { return this.running; }
+
+  get status() {
+    return this.getHealth();
+  }
+
+  getHealth(): {
+    healthy: boolean;
+    running: boolean;
+    uptime: number;
+    pendingFiles: number;
+    pipelineRunning: boolean;
+    eventBus: {
+      bufferSize: number;
+      overflowCount: number;
+      totalProcessed: number;
+      totalFailures: number;
+    };
+    watcher: {
+      ready: boolean;
+      watchedPaths: number;
+    };
+  } {
+    return {
+      healthy: this.running,
+      running: this.running,
+      uptime: this.startTime ? Date.now() - this.startTime : 0,
+      pendingFiles: this.pendingFiles.size,
+      pipelineRunning: this.pipelineRunPromise !== null,
+      eventBus: {
+        bufferSize: this.eventBus.getBufferSize(),
+        overflowCount: this.eventBus.getOverflowCount(),
+        totalProcessed: this.eventBus.getTotalProcessed(),
+        totalFailures: this.eventBus.getTotalFailures(),
+      },
+      watcher: {
+        ready: this.watcher !== null,
+        watchedPaths: this.config.daemon.watchPaths.length,
+      },
+    };
+  }
 }
 
 // Factory

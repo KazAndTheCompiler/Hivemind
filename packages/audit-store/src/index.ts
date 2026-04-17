@@ -329,11 +329,7 @@ export class DurableFileAuditStore {
     for (const write of batch) {
       try {
         await fs.promises.writeFile(write.filePath, write.content, 'utf-8');
-        if (write.type === 'audit') {
-          write.resolve(JSON.parse(write.content));
-        } else {
-          write.resolve(JSON.parse(write.content));
-        }
+        write.resolve(JSON.parse(write.content));
       } catch (err) {
         this.logger.error('audit.flush.write_error', {
           filePath: write.filePath,
@@ -542,8 +538,16 @@ export class AuditStore {
     this.storePath = storePath;
     this.deadLetterPath = deadLetterPath;
 
-    fs.mkdirSync(this.storePath, { recursive: true });
-    fs.mkdirSync(this.deadLetterPath, { recursive: true });
+    try {
+      fs.mkdirSync(this.storePath, { recursive: true });
+      fs.mkdirSync(this.deadLetterPath, { recursive: true });
+    } catch (err) {
+      throw new AuditStoreError(
+        'Failed to create audit store directories',
+        { storePath, deadLetterPath },
+        err instanceof Error ? err : undefined,
+      );
+    }
   }
 
   async persist(event: OpenClawEvent): Promise<AuditRecord> {
@@ -594,15 +598,19 @@ export class AuditStore {
       const files = fs.readdirSync(this.storePath).filter((f) => f.endsWith('.json'));
       const records: AuditRecord[] = [];
       for (const file of files) {
-        const record = JSON.parse(
-          fs.readFileSync(path.join(this.storePath, file), 'utf-8'),
-        ) as AuditRecord;
-        if (kind && record.event.kind !== kind) continue;
-        records.push(record);
+        try {
+          const record = JSON.parse(
+            fs.readFileSync(path.join(this.storePath, file), 'utf-8'),
+          ) as AuditRecord;
+          if (kind && record.event.kind !== kind) continue;
+          records.push(record);
+        } catch (err) {
+          console.error(`Failed to parse audit record ${file}:`, err);
+        }
       }
       return records.sort((a, b) => a.persistedAt.localeCompare(b.persistedAt));
-    } catch {
-      return [];
+    } catch (err) {
+      throw new AuditStoreError('Failed to list audit records', {}, err instanceof Error ? err : undefined);
     }
   }
 

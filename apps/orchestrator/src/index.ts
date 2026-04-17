@@ -16,7 +16,7 @@ import type {
   PipelineLock,
   ToolFinding,
 } from '@openclaw/core-types';
-import { EventBus } from '@openclaw/core-events';
+import { EventBus, Subscription } from '@openclaw/core-events';
 import { Logger, createLoggerFromConfig } from '@openclaw/core-logging';
 import { ConfigService } from '@openclaw/core-config';
 import { AgentSummaryIngestService, SummaryNormalizationService } from '@openclaw/summarizer';
@@ -58,6 +58,43 @@ export interface QualityScore {
   overall: number;
 }
 
+enum CircuitState {
+  CLOSED = 'closed',
+  OPEN = 'open',
+  HALF_OPEN = 'half_open',
+}
+
+interface CircuitBreaker {
+  state: CircuitState;
+  failureCount: number;
+  lastFailure: string | null;
+  lastFailureAt: number | null;
+}
+
+export interface HealthStatus {
+  healthy: boolean;
+  running: boolean;
+  halted: boolean;
+  uptime: number;
+  driftCounter: number;
+  circuitBreakers: Record<string, { state: string; failures: number; lastFailure: string | null }>;
+  eventBus: {
+    bufferSize: number;
+    overflowCount: number;
+    totalProcessed: number;
+    totalFailures: number;
+  };
+  pendingOperations: number;
+  memory: {
+    inboxSize: number;
+    unreadCount: number;
+  };
+  relay: {
+    inboxSize: number;
+    reviewQueueSize: number;
+  };
+}
+
 export class OrchestratorService {
   private config: OpenClawConfig;
   private logger: Logger;
@@ -74,9 +111,18 @@ export class OrchestratorService {
   private checkpointOrchestrator: CheckpointOrchestrator;
   private summaryEmitter: SummaryEmitter;
   private guardStack: GuardStack;
+  private routerSubscription: Subscription | null = null;
   private driftCounter = 0;
   private readonly DRIFT_THRESHOLD = 3;
+  private readonly CIRCUIT_FAILURE_THRESHOLD = 5;
+  private readonly CIRCUIT_RESET_TIMEOUT_MS = 30_000;
   private running = false;
+  private startTime = Date.now();
+
+  private circuitBreakers: Map<string, CircuitBreaker> = new Map([
+    ['secdev', { state: CircuitState.CLOSED, failureCount: 0, lastFailure: null, lastFailureAt: null }],
+    ['quality_gate', { state: CircuitState.CLOSED, failureCount: 0, lastFailure: null, lastFailureAt: null }],
+  ]);
   private pendingOperations = new Set<Promise<unknown>>();
   private pipelineHalted = false;
   private pipelineRunPromise: Promise<void> | null = null;
@@ -133,7 +179,7 @@ export class OrchestratorService {
     const memorySink = new DurableFileSink(memoryPath, this.logger);
     this.memory = new AgentMemory(memorySink, 'orchestrator');
 
-    this.router.startListening();
+    this.routerSubscription = this.router.startListening();
 
     this.eventBus.onAny(async (event) => {
       const op = this.trackOperation(this.auditStore.persist(event));
@@ -217,31 +263,68 @@ export class OrchestratorService {
       throw new Error('Pipeline is halted due to critical severity. Manual intervention required.');
     }
 
-    const taskId = (raw as { taskId?: string }).taskId ?? `task_${Date.now()}`;
+    if (raw === null || raw === undefined) {
+      throw new Error('Cannot process null/undefined summary');
+    }
+
+    if (typeof raw !== 'object') {
+      throw new Error(`Expected object, got ${typeof raw}`);
+    }
+
+    const rawObj = raw as Record<string, unknown>;
+    if (Array.isArray(raw)) {
+      throw new Error('Cannot process array as summary');
+    }
+
+    const taskId = (rawObj.taskId as string | undefined) ?? `task_${Date.now()}`;
     const steps: PipelineStepResult[] = [];
-    const startTime = Date.now();
+
+    const record = (name: string, success: boolean, startMs: number) => {
+      steps.push({ step: name, success, durationMs: Date.now() - startMs });
+    };
 
     try {
+      let t = Date.now();
       const validated = await this.ingestService.ingest(raw);
-      steps.push({ step: 'ingest', success: true, durationMs: Date.now() - startTime });
+      record('ingest', true, t);
 
+      t = Date.now();
       const sanitized = this.sanitizeSummary(validated);
+      record('sanitize', true, t);
+
+      t = Date.now();
       const normalized = await this.normalizationService.normalizeAndEmit(sanitized);
-      steps.push({ step: 'normalize', success: true, durationMs: Date.now() - startTime });
+      record('normalize', true, t);
 
-      const secdevFindings = await this.secdevAdapter.analyzeEmission({
-        kind: 'normalized',
-        summary: normalized,
-      });
+      t = Date.now();
+      let secdevFindings: ToolFinding[] = [];
+      if (this.isCircuitOpen('secdev')) {
+        this.logger.warn('orchestrator.secdev.circuit_open');
+        record('secdev', true, t);
+      } else {
+        try {
+          secdevFindings = await this.secdevAdapter.analyzeEmission({
+            kind: 'normalized',
+            summary: normalized,
+          });
+          this.recordCircuitSuccess('secdev');
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          this.recordCircuitFailure('secdev', msg);
+          this.logger.error('orchestrator.secdev.error', { error: msg });
+        }
+      }
       normalized.toolFindings.push(...secdevFindings);
+      record('secdev', true, t);
 
+      t = Date.now();
       const guardResult = this.guardStack.validateSummary(
         normalized.conciseSummary,
         normalized.touchedFiles,
         normalized.blockers,
         normalized.nextActions,
       );
-      steps.push({ step: 'guard_stack', success: guardResult.passed, durationMs: Date.now() - startTime });
+      record('guard_stack', guardResult.passed, t);
 
       if (!guardResult.passed) {
         this.driftCounter++;
@@ -263,7 +346,7 @@ export class OrchestratorService {
             reason: guardResult.escalationMessage.reason,
           });
           await this.eventBus.emit({
-            kind: 'orchestrator.halted' as any,
+            kind: 'orchestrator.halted',
             schemaVersion: 'v1',
             sequence: 0,
             streamId: taskId,
@@ -292,15 +375,37 @@ export class OrchestratorService {
         this.guardStack.reset();
       }
 
-      const qualityResult = await this.qualityService.runQualityGate(normalized.touchedFiles);
-      normalized.toolFindings.push(...qualityResult.findings);
-      steps.push({
-        step: 'quality_gate',
-        success:
-          qualityResult.findings.filter((f) => f.severity === 'critical' || f.severity === 'high')
-            .length === 0,
-        durationMs: Date.now() - startTime,
-      });
+      t = Date.now();
+      let qualityResult: Awaited<ReturnType<ChangedFileQualityService['runQualityGate']>> | null = null;
+      if (this.isCircuitOpen('quality_gate')) {
+        this.logger.warn('orchestrator.quality_gate.circuit_open');
+        record('quality_gate', true, t);
+      } else {
+        try {
+          qualityResult = await this.qualityService.runQualityGate(normalized.touchedFiles);
+          this.recordCircuitSuccess('quality_gate');
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          this.recordCircuitFailure('quality_gate', msg);
+          this.logger.error('orchestrator.quality_gate.error', { error: msg });
+          record('quality_gate', false, t);
+          return {
+            normalized,
+            relay200: {} as CondensedRelay200,
+            relay300: {} as CondensedRelay300,
+            result: {
+              outcome: 'failed' as PipelineOutcome,
+              taskId,
+              steps,
+              timestamp: new Date().toISOString(),
+            },
+          };
+        }
+      }
+      if (qualityResult) {
+        normalized.toolFindings.push(...qualityResult.findings);
+        record('quality_gate', qualityResult.findings.filter((f) => f.severity === 'critical' || f.severity === 'high').length === 0, t);
+      }
 
       if (this.checkpointOrchestrator.shouldCheckpoint()) {
         const checkpointSummary = this.summaryEmitter.emitCheckpointSummary(
@@ -331,15 +436,13 @@ export class OrchestratorService {
         await this.checkpointOrchestrator.executeCheckpoint();
       }
 
+      t = Date.now();
       const { relay200, relay300 } = await this.condenseService.condenseAndEmit(normalized);
-      steps.push({ step: 'condense', success: true, durationMs: Date.now() - startTime });
+      record('condense', true, t);
 
+      t = Date.now();
       const delivery = await this.relayService.deliverAndEmit(relay200, relay300);
-      steps.push({
-        step: 'relay',
-        success: delivery.delivered,
-        durationMs: Date.now() - startTime,
-      });
+      record('relay', delivery.delivered, t);
 
       if (relay200.severity === 'critical' || relay300.severity === 'critical') {
         this.pipelineHalted = true;
@@ -378,7 +481,7 @@ export class OrchestratorService {
         step: 'unknown',
         success: false,
         error: err instanceof Error ? err.message : String(err),
-        durationMs: Date.now() - startTime,
+        durationMs: 0,
       });
 
       return {
@@ -593,15 +696,11 @@ export class OrchestratorService {
       return;
     }
 
-    this.pipelineRunPromise = this.runQualityGate(files).finally(() => {
+    this.pipelineRunPromise = this.qualityService.runQualityGate(files).finally(() => {
       this.pipelineRunPromise = null;
-    });
+    }) as unknown as Promise<void>;
 
-    return this.pipelineRunPromise;
-  }
-
-  private async runQualityGate(_files: string[]): Promise<void> {
-    this.logger.info('orchestrator.quality.gate.executed', { fileCount: _files.length });
+    await this.pipelineRunPromise;
   }
 
   async replayEvents(kind?: string): Promise<ReplayResult> {
@@ -655,33 +754,66 @@ export class OrchestratorService {
   }
 
   async shutdown(reason = 'manual'): Promise<void> {
-    this.running = false;
-    this.logger.info('orchestrator.shutdown.start', { reason });
-
-    if (this.pendingOperations.size > 0) {
-      this.logger.info('orchestrator.shutdown.waiting', {
-        pendingCount: this.pendingOperations.size,
-      });
-      await Promise.allSettled(
-        Array.from(this.pendingOperations).map((p) =>
-          Promise.race([p, new Promise((r) => setTimeout(r, 1000))]),
-        ),
-      );
+    if (!this.running) {
+      this.logger.warn('orchestrator.shutdown.already_stopped');
+      return;
     }
 
-    await this.memory.flush();
-    await this.auditStore.flush();
-
-    this.logger.info('orchestrator.shutdown.complete', { reason });
-
-    await this.eventBus.emit({
-      kind: 'orchestrator.shutdown',
-      schemaVersion: 'v1',
-      sequence: 0,
-      streamId: 'orchestrator',
+    this.running = false;
+    this.logger.info('orchestrator.shutdown.start', {
       reason,
-      timestamp: new Date().toISOString(),
+      pendingOperations: this.pendingOperations.size,
+      driftCounter: this.driftCounter,
     });
+
+    if (this.routerSubscription) {
+      this.routerSubscription.unsubscribe();
+      this.routerSubscription = null;
+    }
+
+    const shutdownTimeout = new Promise((resolve) => setTimeout(resolve, 5000));
+    const pendingPromise = this.pendingOperations.size > 0
+      ? Promise.allSettled(
+          Array.from(this.pendingOperations).map((p) =>
+            Promise.race([p, new Promise((r) => setTimeout(r, 2000))]),
+          ),
+        )
+      : Promise.resolve();
+
+    await Promise.race([pendingPromise, shutdownTimeout]);
+
+    if (this.pendingOperations.size > 0) {
+      this.logger.warn('orchestrator.shutdown.timeout', {
+        remainingOperations: this.pendingOperations.size,
+      });
+    }
+
+    try {
+      await Promise.all([
+        this.memory.flush(),
+        this.auditStore.flush(),
+      ]);
+      this.logger.info('orchestrator.shutdown.flush_complete');
+    } catch (err) {
+      this.logger.error('orchestrator.shutdown.flush_error', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
+    this.logger.info('orchestrator.shutdown.complete', { reason, uptime: Date.now() - this.startTime });
+
+    try {
+      await this.eventBus.emit({
+        kind: 'orchestrator.shutdown',
+        schemaVersion: 'v1',
+        sequence: 0,
+        streamId: 'orchestrator',
+        reason,
+        timestamp: new Date().toISOString(),
+      });
+    } catch {
+      this.logger.error('orchestrator.shutdown.emit_failed');
+    }
   }
 
   private trackOperation<T>(op: Promise<T>): Promise<T> {
@@ -733,6 +865,106 @@ export class OrchestratorService {
       metrics: this.eventBus.getMetrics(),
       systemState: this.getSystemState(),
     };
+  }
+
+  getHealth(): HealthStatus {
+    const circuitBreakerStatus: Record<string, { state: string; failures: number; lastFailure: string | null }> = {};
+    for (const [name, cb] of this.circuitBreakers) {
+      circuitBreakerStatus[name] = {
+        state: cb.state,
+        failures: cb.failureCount,
+        lastFailure: cb.lastFailure,
+      };
+    }
+
+    return {
+      healthy: this.running && !this.pipelineHalted,
+      running: this.running,
+      halted: this.pipelineHalted,
+      uptime: Date.now() - this.startTime,
+      driftCounter: this.driftCounter,
+      circuitBreakers: circuitBreakerStatus,
+      eventBus: {
+        bufferSize: this.eventBus.getBufferSize(),
+        overflowCount: this.eventBus.getOverflowCount(),
+        totalProcessed: this.eventBus.getTotalProcessed(),
+        totalFailures: this.eventBus.getTotalFailures(),
+      },
+      pendingOperations: this.pendingOperations.size,
+      memory: {
+        inboxSize: this.router.inboxSize,
+        unreadCount: this.router.unreadCount,
+      },
+      relay: {
+        inboxSize: this.relayService.inboxSize,
+        reviewQueueSize: this.relayService.reviewQueueSize,
+      },
+    };
+  }
+
+  private isCircuitOpen(name: string): boolean {
+    const cb = this.circuitBreakers.get(name);
+    if (!cb) return false;
+
+    if (cb.state === CircuitState.OPEN) {
+      const timeSinceLastFailure = cb.lastFailureAt ? Date.now() - cb.lastFailureAt : 0;
+      if (timeSinceLastFailure > this.CIRCUIT_RESET_TIMEOUT_MS) {
+        cb.state = CircuitState.HALF_OPEN;
+        this.logger.info('orchestrator.circuit.half_open', { circuit: name });
+        return false;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  private recordCircuitFailure(name: string, error: string): void {
+    const cb = this.circuitBreakers.get(name);
+    if (!cb) return;
+
+    cb.failureCount++;
+    cb.lastFailure = error;
+    cb.lastFailureAt = Date.now();
+
+    if (cb.failureCount >= this.CIRCUIT_FAILURE_THRESHOLD) {
+      cb.state = CircuitState.OPEN;
+      this.logger.error('orchestrator.circuit.open', {
+        circuit: name,
+        failureCount: cb.failureCount,
+        threshold: this.CIRCUIT_FAILURE_THRESHOLD,
+      });
+    }
+  }
+
+  private recordCircuitSuccess(name: string): void {
+    const cb = this.circuitBreakers.get(name);
+    if (!cb) return;
+
+    cb.failureCount = 0;
+    if (cb.state === CircuitState.HALF_OPEN) {
+      cb.state = CircuitState.CLOSED;
+      this.logger.info('orchestrator.circuit.closed', { circuit: name });
+    }
+  }
+
+  resetCircuitBreakers(): void {
+    for (const [name, cb] of this.circuitBreakers) {
+      cb.failureCount = 0;
+      cb.state = CircuitState.CLOSED;
+      cb.lastFailure = null;
+      cb.lastFailureAt = null;
+      this.logger.info('orchestrator.circuit.reset', { circuit: name });
+    }
+  }
+
+  drainInbox(): Array<{ relay200: CondensedRelay200; relay300: CondensedRelay300 }> {
+    const items = this.relayService.pickUp();
+    this.logger.info('orchestrator.inbox.drained', { count: items.length });
+    return items;
+  }
+
+  getReviewQueue(): Array<{ relay200: CondensedRelay200; relay300: CondensedRelay300; addedAt: string; reason: string }> {
+    return this.relayService.pickUpReviewQueue();
   }
 }
 

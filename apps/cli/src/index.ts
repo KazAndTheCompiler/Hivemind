@@ -15,7 +15,9 @@ Usage:
 Commands:
   start             Start the orchestrator (foreground)
   daemon            Start the watch daemon
-  status            Show orchestrator status
+  status            Show orchestrator health status
+  health            Show orchestrator health (alias for status)
+  config            Show current configuration
   help              Show this help message
 
 Environment:
@@ -35,20 +37,15 @@ async function cmdStart(): Promise<void> {
 
   logger.info('cli.orchestrator.running');
 
-  // Graceful shutdown
-  process.on('SIGTERM', async () => {
-    logger.info('cli.shutdown.signal', { signal: 'SIGTERM' });
-    await orchestrator.shutdown('SIGTERM');
+  const shutdown = async (signal: string) => {
+    logger.info('cli.shutdown.signal', { signal });
+    await orchestrator.shutdown(signal);
     process.exit(0);
-  });
+  };
 
-  process.on('SIGINT', async () => {
-    logger.info('cli.shutdown.signal', { signal: 'SIGINT' });
-    await orchestrator.shutdown('SIGINT');
-    process.exit(0);
-  });
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 
-  // Keep alive
   await new Promise(() => {});
 }
 
@@ -59,15 +56,25 @@ async function cmdDaemon(): Promise<void> {
   const daemon = createDaemon();
   await daemon.start();
 
-  // Keep alive (daemon handles its own signals)
+  logger.info('cli.daemon.running');
+
+  const shutdown = async (signal: string) => {
+    logger.info('cli.shutdown.signal', { signal });
+    await daemon.shutdown(signal);
+    process.exit(0);
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+
   await new Promise(() => {});
 }
 
 async function cmdStatus(): Promise<void> {
   try {
     const orchestrator = createOrchestrator();
-    const status = orchestrator.status;
-    console.log('OpenClaw Status:', JSON.stringify(status, null, 2));
+    const status = orchestrator.getHealth();
+    console.log('OpenClaw Health:', JSON.stringify(status, null, 2));
   } catch (err) {
     console.error('Failed to get status:', err instanceof Error ? err.message : String(err));
     process.exit(1);
@@ -98,6 +105,7 @@ async function main(): Promise<void> {
       await cmdDaemon();
       break;
     case 'status':
+    case 'health':
       await cmdStatus();
       break;
     case 'config':

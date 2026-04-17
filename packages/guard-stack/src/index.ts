@@ -204,6 +204,10 @@ export class GuardStack {
     this.history = [];
   }
 
+  getBackoffMs(attempt: number): number {
+    return this.retryPolicy.getBackoffMs(attempt);
+  }
+
   getAttempt(): number {
     return this.attempt;
   }

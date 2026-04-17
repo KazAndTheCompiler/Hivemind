@@ -91,6 +91,9 @@ describe('OpenClawEventSchema', () => {
   it('discriminates file.change.detected', () => {
     const event = {
       kind: 'file.change.detected' as const,
+      schemaVersion: 'v1' as const,
+      sequence: 1,
+      streamId: 'test',
       files: ['src/a.ts'],
       packageNames: ['@openclaw/core-types'],
       timestamp: '2026-04-14T00:00:00Z',
@@ -102,6 +105,9 @@ describe('OpenClawEventSchema', () => {
   it('discriminates agent.summary.emitted', () => {
     const event = {
       kind: 'agent.summary.emitted' as const,
+      schemaVersion: 'v1' as const,
+      sequence: 1,
+      streamId: 'test',
       raw: {
         taskId: 't1',
         agentId: 'w1',

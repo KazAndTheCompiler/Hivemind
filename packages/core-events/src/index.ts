@@ -135,8 +135,11 @@ export class EventBus {
     });
 
     if (this._idempotencyCache.size > MAX_IDEMPOTENCY_CACHE) {
-      const oldestKey = this._idempotencyCache.keys().next().value;
-      if (oldestKey) this._idempotencyCache.delete(oldestKey);
+      const excess = this._idempotencyCache.size - MAX_IDEMPOTENCY_CACHE;
+      const keysToDelete = Array.from(this._idempotencyCache.keys()).slice(0, excess);
+      for (const key of keysToDelete) {
+        this._idempotencyCache.delete(key);
+      }
     }
 
     if (this.buffer.length >= MAX_BUFFER_SIZE) {
@@ -168,10 +171,17 @@ export class EventBus {
     }
   }
 
+  private _lockPromise: Promise<void> | null = null;
+  private _lockResolve: (() => void) | null = null;
+
   async emitWithLock(
     event: OpenClawEvent,
     owner: 'daemon' | 'orchestrator' | 'replay',
   ): Promise<boolean> {
+    while (this._lockPromise !== null) {
+      await this._lockPromise;
+    }
+
     if (this.pipelineLock.owner !== null && this.pipelineLock.owner !== owner) {
       this.metrics.pipelineLockConflicts++;
       this.logger.warn('event.pipeline.locked', {
@@ -189,8 +199,23 @@ export class EventBus {
       };
     }
 
-    await this.emit(event);
-    return true;
+    this._lockPromise = new Promise((resolve) => {
+      this._lockResolve = resolve;
+    });
+
+    try {
+      await this.emit(event);
+      return true;
+    } finally {
+      if (this.pipelineLock.owner === owner) {
+        this.pipelineLock = { owner: null, lockedAt: null };
+      }
+      if (this._lockResolve) {
+        this._lockResolve();
+      }
+      this._lockPromise = null;
+      this._lockResolve = null;
+    }
   }
 
   releaseLock(owner: 'daemon' | 'orchestrator' | 'replay'): void {
@@ -218,25 +243,28 @@ export class EventBus {
       }
 
       const currentSeq = this._streamSequences.get(streamId)!;
-      const sequence = eventSequence > 0 ? eventSequence : currentSeq + 1;
-      this._streamSequences.set(streamId, sequence);
-
       const expectedSeq = currentSeq + 1;
-      if (sequence > expectedSeq) {
+
+      if (eventSequence > 0 && eventSequence > expectedSeq) {
         this.logger.warn('event.sequence.gap', {
           streamId,
           expected: expectedSeq,
-          actual: sequence,
+          actual: eventSequence,
         });
-      } else if (sequence < expectedSeq) {
+      }
+
+      if (eventSequence > 0 && eventSequence < expectedSeq) {
         this.logger.warn('event.sequence.out_of_order', {
           streamId,
           expected: expectedSeq,
-          actual: sequence,
+          actual: eventSequence,
+          eventId: (event as { eventId?: string }).eventId,
         });
-        this.buffer.unshift(event);
+        this.logger.debug('event.sequence.discarded', { streamId, eventSequence });
         continue;
       }
+
+      const sequence = eventSequence > 0 ? eventSequence : expectedSeq;
       this._streamSequences.set(streamId, sequence);
 
       const meta: EventMeta = {

@@ -30,16 +30,18 @@ export class MainAgentRelayService {
   private inbox: Array<{ relay200: CondensedRelay200; relay300: CondensedRelay300 }> = [];
   private reviewQueue: ReviewQueueItem[] = [];
   private maxInboxSize: number;
+  private maxReviewQueueSize: number;
   private confidenceThreshold: number;
 
   constructor(
     eventBus: EventBus,
     logger: Logger,
-    options?: { maxInboxSize?: number; confidenceThreshold?: number },
+    options?: { maxInboxSize?: number; maxReviewQueueSize?: number; confidenceThreshold?: number },
   ) {
     this.eventBus = eventBus;
     this.logger = logger.child({ service: 'MainAgentRelayService' });
     this.maxInboxSize = options?.maxInboxSize ?? 100;
+    this.maxReviewQueueSize = options?.maxReviewQueueSize ?? 500;
     this.confidenceThreshold = options?.confidenceThreshold ?? 0.5;
   }
 
@@ -88,6 +90,13 @@ export class MainAgentRelayService {
       }
 
       if (routing.decision === 'review_queue') {
+        while (this.reviewQueue.length >= this.maxReviewQueueSize) {
+          this.reviewQueue.shift();
+          this.logger.warn('relay.review_queue.full.dropped_oldest', {
+            taskId: relay200.taskId,
+            reviewQueueSize: this.reviewQueue.length,
+          });
+        }
         this.reviewQueue.push({
           relay200,
           relay300,
@@ -108,7 +117,7 @@ export class MainAgentRelayService {
         };
       }
 
-      if (this.inbox.length >= this.maxInboxSize) {
+      while (this.inbox.length >= this.maxInboxSize) {
         this.inbox.shift();
         this.logger.warn('relay.inbox.full.dropped_oldest', {
           taskId: relay200.taskId,

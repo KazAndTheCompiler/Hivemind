@@ -92,13 +92,15 @@ export class LocalEslintRunner implements EslintRunner {
 
       // Support cancellation
       if (cancelToken) {
-        const checkCancel = setInterval(() => {
-          if (cancelToken.isCancelled) {
-            child.kill('SIGTERM');
-            clearInterval(checkCancel);
-          }
-        }, 100);
-        child.on('exit', () => clearInterval(checkCancel));
+      const checkCancel = setInterval(() => {
+        if (cancelToken.isCancelled) {
+          child.kill('SIGTERM');
+          clearInterval(checkCancel);
+        }
+      }, 100);
+      child.on('exit', () => {
+        clearInterval(checkCancel);
+      });
       }
 
       const { stdout } = await new Promise<{ stdout: string; stderr: string }>(

@@ -82,7 +82,10 @@ export class ToolExecutionQueue {
 
   async enqueue(task: ToolTask): Promise<ToolTaskResult> {
     while (this.activeTasks.size >= this.maxConcurrent) {
-      await Promise.race(this.activeTasks);
+      await Promise.race([
+        ...this.activeTasks,
+        new Promise((resolve) => setTimeout(resolve, 100)),
+      ]);
     }
 
     const cancelToken = new CancelToken();

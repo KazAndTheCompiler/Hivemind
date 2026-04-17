@@ -33,16 +33,42 @@ export interface MemorySink {
 export class InMemorySink implements MemorySink {
   private store = new Map<string, MemoryEntry>();
   private logger: Logger;
+  private cleanupTimer: NodeJS.Timeout | null = null;
+  private readonly CLEANUP_INTERVAL_MS = 60_000;
 
   constructor(logger: Logger) {
     this.logger = logger.child({ service: 'InMemorySink' });
+    this.scheduleCleanup();
+  }
+
+  private scheduleCleanup(): void {
+    if (this.cleanupTimer) return;
+    this.cleanupTimer = setInterval(() => {
+      this.cleanupExpired();
+    }, this.CLEANUP_INTERVAL_MS);
+  }
+
+  private cleanupExpired(): void {
+    const now = Date.now();
+    let cleaned = 0;
+    for (const [key, entry] of this.store) {
+      if (entry.ttl) {
+        const age = (now - new Date(entry.createdAt).getTime()) / 1000;
+        if (age > entry.ttl) {
+          this.store.delete(key);
+          cleaned++;
+        }
+      }
+    }
+    if (cleaned > 0) {
+      this.logger.debug('memory.cleanup', { cleaned, remaining: this.store.size });
+    }
   }
 
   async get(key: string): Promise<unknown> {
     const entry = this.store.get(key);
     if (!entry) return undefined;
 
-    // Check TTL
     if (entry.ttl) {
       const age = (Date.now() - new Date(entry.createdAt).getTime()) / 1000;
       if (age > entry.ttl) {
@@ -73,6 +99,13 @@ export class InMemorySink implements MemorySink {
   get size(): number {
     return this.store.size;
   }
+
+  destroy(): void {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = null;
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -85,6 +118,7 @@ export class DurableFileSink implements MemorySink {
   private index = new Map<string, { file: string; expiresAt?: number }>();
   private writeQueue = new Map<string, { value: unknown; ttl?: number }>();
   private flushTimer: NodeJS.Timeout | null = null;
+  private flushing = false;
 
   constructor(storePath: string, logger: Logger) {
     this.storePath = storePath;
@@ -165,15 +199,26 @@ export class DurableFileSink implements MemorySink {
     const expiresAt = ttl ? Date.now() + ttl * 1000 : undefined;
     this.index.set(key, { file: fileName, expiresAt });
 
-    // Queue the write
     this.writeQueue.set(key, { value, ttl });
-
-    // Schedule flush
-    if (!this.flushTimer) {
-      this.flushTimer = setTimeout(() => this.flush(), 200);
-    }
+    this.scheduleFlush();
 
     this.logger.trace('memory.set', { key, ttl, queued: true });
+  }
+
+  private scheduleFlush(): void {
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
+    if (this.flushing) return;
+    if (this.writeQueue.size >= 50) {
+      this.flush().catch(() => {});
+    } else {
+      this.flushTimer = setTimeout(() => {
+        this.flushTimer = null;
+        this.flush().catch(() => {});
+      }, 200);
+    }
   }
 
   async delete(key: string): Promise<void> {
@@ -201,13 +246,12 @@ export class DurableFileSink implements MemorySink {
 
   async flush(): Promise<void> {
     if (this.writeQueue.size === 0) {
-      this.flushTimer = null;
       return;
     }
 
+    this.flushing = true;
     const batch = new Map(this.writeQueue);
     this.writeQueue.clear();
-    this.flushTimer = null;
 
     for (const [key, { value, ttl }] of batch) {
       const entry = this.index.get(key);
@@ -221,11 +265,11 @@ export class DurableFileSink implements MemorySink {
           key,
           error: err instanceof Error ? err.message : String(err),
         });
-        // Re-queue on failure
         this.writeQueue.set(key, { value, ttl });
       }
     }
 
+    this.flushing = false;
     this.saveIndex();
     this.logger.debug('memory.flush.complete', { flushedCount: batch.size });
   }

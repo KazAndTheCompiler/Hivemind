@@ -44,6 +44,27 @@ export class ChangedFileQualityService {
     // Collect findings from all tools
     const findings: ToolFinding[] = [...eslintResult.findings, ...prettierResult.findings];
 
+    // Add error findings when tools crash
+    if (prettierResult.crashed) {
+      findings.push({
+        source: 'prettier',
+        severity: 'high',
+        code: 'TOOL_CRASH',
+        message: `Prettier crashed: ${prettierResult.crashMessage ?? 'unknown error'}`,
+        fileRefs: prettierResult.formattedFiles,
+      });
+    }
+
+    if (eslintResult.crashed) {
+      findings.push({
+        source: 'eslint',
+        severity: 'high',
+        code: 'TOOL_CRASH',
+        message: `ESLint crashed: ${eslintResult.crashMessage ?? 'unknown error'}`,
+        fileRefs: eslintResult.fixedFiles,
+      });
+    }
+
     // Check for security-relevant changes via SecDev
     const secdevFindings = await this.secdevAdapter.analyzeFiles(files);
     findings.push(...secdevFindings);

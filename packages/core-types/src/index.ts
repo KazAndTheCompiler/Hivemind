@@ -221,6 +221,15 @@ export interface OrchestratorShutdownEvent {
   timestamp: string;
 }
 
+export interface OrchestratorHaltedEvent {
+  kind: 'orchestrator.halted';
+  schemaVersion: SchemaVersion;
+  sequence: number;
+  streamId: string;
+  reason: string;
+  timestamp: string;
+}
+
 export interface WorkerEmitEvent {
   kind: 'worker.emit';
   schemaVersion: SchemaVersion;
@@ -276,6 +285,7 @@ export type OpenClawEvent =
   | DeadLetterEvent
   | OrchestratorStartEvent
   | OrchestratorShutdownEvent
+  | OrchestratorHaltedEvent
   | WorkerEmitEvent
   | RelayDeliveredEvent
   | RelayDeliveryFailedEvent

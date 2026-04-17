@@ -1,9 +1,9 @@
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **secdev_project-main** (3534 symbols, 6556 relationships, 252 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+> **IMPORTANT**: This repo is at `/home/kaz/madlab/Live_projects/Hivemind`. Run `npx gitnexus analyze` to index it if the index is stale.
 
-> If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
+Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 ## Always Do
 
@@ -17,8 +17,7 @@ This project is indexed by GitNexus as **secdev_project-main** (3534 symbols, 65
 
 1. `gitnexus_query({query: "<error or symptom>"})` — find execution flows related to the issue
 2. `gitnexus_context({name: "<suspect function>"})` — see all callers, callees, and process participation
-3. `READ gitnexus://repo/secdev_project-main/process/{processName}` — trace the full execution flow step by step
-4. For regressions: `gitnexus_detect_changes({scope: "compare", base_ref: "main"})` — see what your branch changed
+3. `gitnexus_detect_changes({scope: "compare", base_ref: "main"})` — see what your branch changed
 
 ## When Refactoring
 
@@ -56,10 +55,10 @@ This project is indexed by GitNexus as **secdev_project-main** (3534 symbols, 65
 
 | Resource | Use for |
 |----------|---------|
-| `gitnexus://repo/secdev_project-main/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/secdev_project-main/clusters` | All functional areas |
-| `gitnexus://repo/secdev_project-main/processes` | All execution flows |
-| `gitnexus://repo/secdev_project-main/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/<name>/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/<name>/clusters` | All functional areas |
+| `gitnexus://repo/<name>/processes` | All execution flows |
+| `gitnexus://repo/<name>/process/{name}` | Step-by-step execution trace |
 
 ## Self-Check Before Finishing
 

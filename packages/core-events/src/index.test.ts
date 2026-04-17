@@ -19,6 +19,9 @@ describe('EventBus', () => {
 
     const event: OpenClawEvent = {
       kind: 'file.change.detected',
+      schemaVersion: 'v1',
+      sequence: 1,
+      streamId: 'test',
       files: ['src/a.ts'],
       packageNames: ['@openclaw/core-types'],
       timestamp: new Date().toISOString(),
@@ -39,6 +42,9 @@ describe('EventBus', () => {
 
     await bus.emit({
       kind: 'orchestrator.started',
+      schemaVersion: 'v1',
+      sequence: 0,
+      streamId: 'test',
       timestamp: new Date().toISOString(),
     });
 
@@ -55,6 +61,9 @@ describe('EventBus', () => {
 
     await bus.emit({
       kind: 'orchestrator.started',
+      schemaVersion: 'v1',
+      sequence: 0,
+      streamId: 'test',
       timestamp: new Date().toISOString(),
     });
     expect(callCount).toBe(1);
@@ -63,6 +72,9 @@ describe('EventBus', () => {
 
     await bus.emit({
       kind: 'orchestrator.started',
+      schemaVersion: 'v1',
+      sequence: 0,
+      streamId: 'test',
       timestamp: new Date().toISOString(),
     });
     expect(callCount).toBe(1); // Should not increment
