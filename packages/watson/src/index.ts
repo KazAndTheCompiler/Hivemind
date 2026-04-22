@@ -190,3 +190,9 @@ function truncatePayloadToBudgetWithPriority<T extends object>(
 
 export { WatsonFilter as SummaryCondenseService };
 export type { NormalizedAgentSummary, CondensedRelay200, CondensedRelay300 };
+export {
+  buildBuilderProgress,
+  buildProgressSignal,
+  buildReducedStatePacket,
+  buildReducerPacket,
+} from './hivemind-v2';
