@@ -144,5 +144,20 @@ describe('SummaryCondenseService', () => {
     expect(projection.reducerPacket.signalIds).toEqual([projection.progressSignal.id]);
     expect(projection.reducerPacket.recommendedAction).toBe('retry');
     expect(projection.reducerPacket.risk).toBe('high');
+    expect(projection.reducerPacket.supervisorOptions).toEqual([]);
+  });
+
+  it('surfaces the TruffleHog sanitize-and-ship option for completed work', () => {
+    const projection = service.projectHivemindState(createNormalizedSummary());
+
+    expect(projection.progressSignal.value.supervisorOptions[0]?.tool).toBe('trufflehog');
+    expect(projection.reducedState.supervisorOptions[0]?.stage).toBe('sanitize-and-ship');
+    expect(projection.reducerPacket.supervisorOptions[0]?.command).toEqual([
+      'trufflehog',
+      'git',
+      'file://.',
+      '--results=verified,unknown',
+      '--fail',
+    ]);
   });
 });

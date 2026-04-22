@@ -179,6 +179,7 @@ describe('Hivemind v2 typed-state schemas', () => {
             proposedNext: ['add zod schemas'],
             needsReview: false,
             evidence: ['diff:packages/core-types/src/index.ts'],
+            supervisorOptions: [],
           },
           refs: ['packages/core-types/src/index.ts'],
           evidence: ['diff:packages/core-types/src/index.ts'],
@@ -215,6 +216,7 @@ describe('Hivemind v2 typed-state schemas', () => {
       proposedNext: [],
       needsReview: true,
       evidence: [],
+      supervisorOptions: [],
     };
 
     expect(HivemindBuilderProgressSchema.safeParse(invalid).success).toBe(false);
@@ -231,6 +233,18 @@ describe('Hivemind v2 typed-state schemas', () => {
       conflicts: [],
       touchedFiles: ['packages/core-types/src/index.ts', 'packages/core-schemas/src/index.ts'],
       evidenceRefs: ['diff:core-types', 'diff:core-schemas'],
+      supervisorOptions: [
+        {
+          id: 'sanitize-and-ship.trufflehog',
+          stage: 'sanitize-and-ship',
+          label: 'Run TruffleHog before push or release',
+          tool: 'trufflehog',
+          enabledByDefault: false,
+          rationale: 'Optional pre-ship secret scan',
+          command: ['trufflehog', 'git', 'file://.', '--results=verified,unknown', '--fail'],
+          activationHints: ['Run before push'],
+        },
+      ],
       risk: 'medium',
       recommendedAction: 'accept',
     };

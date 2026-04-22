@@ -593,7 +593,21 @@ export interface HivemindReducedStatePacket {
   conflicts: string[];
   touchedFiles: string[];
   evidenceRefs: string[];
+  supervisorOptions: HivemindSupervisorOption[];
   risk: HivemindSignalSeverity;
+}
+
+export type HivemindSupervisorOptionStage = 'sanitize-and-ship';
+
+export interface HivemindSupervisorOption {
+  id: string;
+  stage: HivemindSupervisorOptionStage;
+  label: string;
+  tool: 'trufflehog';
+  enabledByDefault: boolean;
+  rationale: string;
+  command: string[];
+  activationHints: string[];
 }
 
 export interface HivemindSupervisorVerdict {
@@ -617,6 +631,7 @@ export interface HivemindBuilderProgress {
   proposedNext: string[];
   needsReview: boolean;
   evidence: string[];
+  supervisorOptions: HivemindSupervisorOption[];
 }
 
 export interface HivemindReducerPacket {
@@ -629,6 +644,7 @@ export interface HivemindReducerPacket {
   conflicts: string[];
   touchedFiles: string[];
   evidenceRefs: string[];
+  supervisorOptions: HivemindSupervisorOption[];
   risk: HivemindSignalSeverity;
   recommendedAction: 'accept' | 'retry' | 'block' | 'review' | 'escalate';
 }

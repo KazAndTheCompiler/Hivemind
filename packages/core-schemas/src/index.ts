@@ -373,6 +373,18 @@ export const HivemindBuilderProgressSchema = z.object({
   proposedNext: z.array(z.string()).default([]),
   needsReview: z.boolean(),
   evidence: z.array(z.string()).default([]),
+  supervisorOptions: z.array(
+    z.object({
+      id: z.string().min(1),
+      stage: z.literal('sanitize-and-ship'),
+      label: z.string().min(1),
+      tool: z.literal('trufflehog'),
+      enabledByDefault: z.boolean(),
+      rationale: z.string().min(1),
+      command: z.array(z.string().min(1)).min(1),
+      activationHints: z.array(z.string()).default([]),
+    }),
+  ).default([]),
 });
 
 export const HivemindBaseSignalSchema = z.object({
@@ -416,6 +428,7 @@ export const HivemindReducedStatePacketSchema = z.object({
   conflicts: z.array(z.string()).default([]),
   touchedFiles: z.array(z.string()).default([]),
   evidenceRefs: z.array(z.string()).default([]),
+  supervisorOptions: HivemindBuilderProgressSchema.shape.supervisorOptions,
   risk: HivemindSignalSeveritySchema,
 });
 
@@ -441,6 +454,7 @@ export const HivemindReducerPacketSchema = z.object({
   conflicts: z.array(z.string()).default([]),
   touchedFiles: z.array(z.string()).default([]),
   evidenceRefs: z.array(z.string()).default([]),
+  supervisorOptions: HivemindBuilderProgressSchema.shape.supervisorOptions,
   risk: HivemindSignalSeveritySchema,
   recommendedAction: z.enum(['accept', 'retry', 'block', 'review', 'escalate']),
 });

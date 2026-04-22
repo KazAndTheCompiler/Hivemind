@@ -47,6 +47,8 @@ Added:
 - `HivemindBuilderProgress`
 - `HivemindBuilderProgressSchema`
 
+This draft now also carries optional `supervisorOptions`, including a non-default `sanitize-and-ship.trufflehog` action for final secret scanning before push or release.
+
 This is the structured replacement for narrative worker status updates.
 
 ### 4. Reducer packet schema

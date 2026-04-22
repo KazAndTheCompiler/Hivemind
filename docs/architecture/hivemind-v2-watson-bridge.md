@@ -54,6 +54,12 @@ It returns one in-process projection object containing:
 - `reducedState`
 - `reducerPacket`
 
+For completed, ship-ready work, the projection also carries a supervisor option for the `sanitize-and-ship` stage:
+
+- `sanitize-and-ship.trufflehog`
+- default off
+- intended for the final secret-sanitization pass before push or release
+
 This is the minimal usable phase-1 bridge:
 existing callers can keep the current relay flow, while supervisor-oriented code can start consuming typed-state output from the same normalized summary input.
 

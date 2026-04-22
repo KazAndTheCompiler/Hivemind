@@ -43,6 +43,8 @@ describe('hivemind v2 watson bridge', () => {
     expect(progress.touchedFiles).toEqual(['src/foo.ts', 'src/bar.ts']);
     expect(progress.proposedNext).toEqual(['Supervisor review']);
     expect(progress.needsReview).toBe(false);
+    expect(progress.supervisorOptions[0]?.tool).toBe('trufflehog');
+    expect(progress.supervisorOptions[0]?.enabledByDefault).toBe(false);
   });
 
   it('builds a progress signal with evidence and refs', () => {
@@ -51,7 +53,7 @@ describe('hivemind v2 watson bridge', () => {
     expect(signal.domain).toBe('progress');
     expect(signal.kind).toBe('builder.progress');
     expect(signal.refs).toContain('src/foo.ts');
-    expect(signal.evidence.some((entry) => entry.includes('eslint:clean'))).toBe(true);
+    expect(signal.evidence?.some((entry) => entry.includes('eslint:clean'))).toBe(true);
   });
 
   it('builds a reduced packet for supervisor intake', () => {
@@ -61,6 +63,7 @@ describe('hivemind v2 watson bridge', () => {
     expect(packet.summary[0]).toContain('Implemented the bounded change');
     expect(packet.approvedFacts).toContain('status:done');
     expect(packet.touchedFiles).toEqual(['src/foo.ts', 'src/bar.ts']);
+    expect(packet.supervisorOptions[0]?.stage).toBe('sanitize-and-ship');
     expect(packet.risk).toBe('low');
   });
 
@@ -76,5 +79,6 @@ describe('hivemind v2 watson bridge', () => {
     expect(reducerPacket.blockers).toContain('Missing ownership approval for src/baz.ts');
     expect(reducerPacket.recommendedAction).toBe('retry');
     expect(reducerPacket.risk).toBe('high');
+    expect(reducerPacket.supervisorOptions).toEqual([]);
   });
 });

@@ -3,6 +3,7 @@ import type {
   HivemindBuilderProgress,
   HivemindReducedStatePacket,
   HivemindReducerPacket,
+  HivemindSupervisorOption,
   NormalizedAgentSummary,
   ToolFinding,
 } from '@openclaw/core-types';
@@ -28,6 +29,32 @@ function deriveRisk(summary: NormalizedAgentSummary): HivemindReducedStatePacket
   return 'low';
 }
 
+function buildSupervisorOptions(summary: NormalizedAgentSummary): HivemindSupervisorOption[] {
+  const isReadyForSanitizeAndShip =
+    summary.status === 'done' && summary.touchedFiles.length > 0 && summary.confidence >= 0.7;
+
+  if (!isReadyForSanitizeAndShip) {
+    return [];
+  }
+
+  return [
+    {
+      id: 'sanitize-and-ship.trufflehog',
+      stage: 'sanitize-and-ship',
+      label: 'Run TruffleHog before push or release',
+      tool: 'trufflehog',
+      enabledByDefault: false,
+      rationale:
+        'Use this supervisor-controlled gate when the change is ready to sanitize and ship, so secret scanning happens immediately before push or release.',
+      command: ['trufflehog', 'git', 'file://.', '--results=verified,unknown', '--fail'],
+      activationHints: [
+        'Activate when the task is complete and the next step is push, release, or handoff outside the repo.',
+        'Run from the repository root so TruffleHog scans current Git history and working tree context.',
+      ],
+    },
+  ];
+}
+
 export function buildBuilderProgress(summary: NormalizedAgentSummary): HivemindBuilderProgress {
   const phase: HivemindBuilderProgress['phase'] =
     summary.status === 'blocked'
@@ -50,6 +77,7 @@ export function buildBuilderProgress(summary: NormalizedAgentSummary): HivemindB
       ...summary.toolFindings.map((finding) => `${finding.source}:${finding.code}`),
       ...summary.toolFindings.flatMap((finding) => finding.fileRefs),
     ]),
+    supervisorOptions: buildSupervisorOptions(summary),
   };
 }
 
@@ -102,6 +130,7 @@ export function buildReducedStatePacket(
       ...progress.evidence,
       ...summary.toolFindings.flatMap((finding) => finding.fileRefs),
     ]),
+    supervisorOptions: progress.supervisorOptions,
     risk: deriveRisk(summary),
   };
 }
@@ -120,6 +149,7 @@ export function buildReducerPacket(summary: NormalizedAgentSummary): HivemindRed
     conflicts: reduced.conflicts,
     touchedFiles: reduced.touchedFiles,
     evidenceRefs: reduced.evidenceRefs,
+    supervisorOptions: reduced.supervisorOptions,
     risk: reduced.risk,
     recommendedAction:
       reduced.risk === 'critical'
