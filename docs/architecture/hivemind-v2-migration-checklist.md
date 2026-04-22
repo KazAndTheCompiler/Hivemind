@@ -16,7 +16,7 @@ Short checklist against the current summary-first assumptions in this repo.
 - [ ] Add builder progress emission at task boundaries before replacing existing worker summaries.
 - [ ] Rename condenser/reducer responsibilities in docs and code paths, even if the runtime still uses old names temporarily.
 - [ ] Make evidence and refs required by policy for high-confidence code, ownership, quality, and security claims.
-- [ ] Change supervisor inputs from condensed prose to reducer packets once a deterministic reducer exists.
+- [ ] Change supervisor inputs from condensed prose to reducer packets once the Watson dual-write projection is wired into runtime callers.
 - [ ] Keep human-readable summaries as projections only, not the transport substrate.
 - [ ] Update guard checks to enforce ownership, drift, evidence density, and conflict handling on typed packets.
 
@@ -25,5 +25,5 @@ Short checklist against the current summary-first assumptions in this repo.
 For now, v1 summary types and v2 typed-state types should coexist. The safest first rollout is dual-write:
 
 1. existing summary flow still runs
-2. builder emits structured progress in parallel
+2. Watson `projectHivemindState(summary)` emits structured progress and reducer artifacts in parallel
 3. reducer packet becomes the new supervisor input once coverage is good enough

@@ -114,4 +114,35 @@ describe('SummaryCondenseService', () => {
     const { relay200 } = service.condense(summary);
     expect(relay200.touchedFiles.length).toBeLessThanOrEqual(5);
   });
+
+  it('projects relay outputs and typed-state artifacts together', () => {
+    const summary = createNormalizedSummary({
+      status: 'blocked',
+      blockers: ['Waiting for API contract approval'],
+      nextActions: ['Escalate contract question'],
+      toolFindings: [
+        {
+          source: 'secdev',
+          severity: 'high',
+          code: 'AUTHZ',
+          message: 'Auth boundary still unresolved',
+          fileRefs: ['src/authz.ts'],
+        },
+      ],
+    });
+
+    const projection = service.projectHivemindState(summary);
+
+    expect(projection.relay200.taskId).toBe(summary.taskId);
+    expect(projection.relay300.status).toBe('blocked');
+    expect(projection.progressSignal.taskId).toBe(summary.taskId);
+    expect(projection.progressSignal.value.phase).toBe('blocked');
+    expect(projection.progressSignal.refs).toEqual(summary.touchedFiles);
+    expect(projection.reducedState.blockers).toEqual(['Waiting for API contract approval']);
+    expect(projection.reducedState.evidenceRefs).toContain('src/authz.ts');
+    expect(projection.reducerPacket.summary).toEqual(projection.reducedState.summary);
+    expect(projection.reducerPacket.signalIds).toEqual([projection.progressSignal.id]);
+    expect(projection.reducerPacket.recommendedAction).toBe('retry');
+    expect(projection.reducerPacket.risk).toBe('high');
+  });
 });

@@ -1,6 +1,6 @@
 # Hivemind v2 Watson Bridge
 
-Status: draft
+Status: implemented first slice
 Date: 2026-04-22
 
 ## Purpose
@@ -27,7 +27,11 @@ This keeps the migration incremental:
 
 ## Current implementation
 
-Added helper builders in `packages/watson/src/hivemind-v2.ts`:
+The first real bridge now lives in `packages/watson`.
+
+### Deterministic builders
+
+`packages/watson/src/hivemind-v2.ts` provides:
 
 - `buildBuilderProgress(summary)`
 - `buildProgressSignal(summary)`
@@ -38,6 +42,21 @@ These functions intentionally stay deterministic.
 They do not perform LLM inference.
 They only project already-normalized summary state into bounded typed-state artifacts.
 
+### Dual-write service API
+
+`packages/watson/src/index.ts` now exposes `projectHivemindState(summary)` on `SummaryCondenseService` / `WatsonFilter`.
+
+It returns one in-process projection object containing:
+
+- `relay200`
+- `relay300`
+- `progressSignal`
+- `reducedState`
+- `reducerPacket`
+
+This is the minimal usable phase-1 bridge:
+existing callers can keep the current relay flow, while supervisor-oriented code can start consuming typed-state output from the same normalized summary input.
+
 ## What this enables
 
 - dual-write migration instead of hard cutover
@@ -47,16 +66,17 @@ They only project already-normalized summary state into bounded typed-state arti
 
 ## What it does not do yet
 
-- emit new event-bus event kinds
+- emit new event-bus event kinds for typed-state artifacts
 - persist typed-state packets in audit storage
 - replace Watson's existing relay outputs
 - implement a full conflict-aware reducer across multiple emitters
+- collapse the runtime onto reducer packets as the sole supervisor input
 
 ## Recommended next step
 
-Add one narrow integration path where a current summary producer or Watson caller writes both:
+Add one narrow runtime integration path where a current Watson caller takes `projectHivemindState(summary)` and writes both:
 
 - existing relay artifacts
-- `HivemindReducerPacket`
+- `HivemindReducerPacket` (and optionally the progress signal)
 
-That will let the supervisor path begin consuming reduced typed state before the rest of the runtime is migrated.
+That keeps this slice small while making the next migration step obvious: switch supervisor intake from reparsed condensed prose to deterministic reducer packets.
