@@ -135,5 +135,7 @@ An initial typed-state supervision scaffold now exists for the planned summary-f
   - `docs/architecture/hivemind-v2-typed-state-scaffold.md`
   - `docs/architecture/hivemind-v2-watson-bridge.md`
   - `docs/architecture/hivemind-v2-migration-checklist.md`
+  - `docs/architecture/adr-0004-design-output-minimums.md`
+  - `docs/runbooks/secrets-and-binds.md`
 
 This is intentionally a draft substrate, not a full runtime cutover.
