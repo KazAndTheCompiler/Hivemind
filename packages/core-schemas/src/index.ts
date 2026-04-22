@@ -15,6 +15,19 @@ export const ToolSeveritySchema = z.enum(['info', 'low', 'medium', 'high', 'crit
 
 export const ToolSourceSchema = z.enum(['secdev', 'gitnexus', 'eslint', 'prettier', 'system']);
 
+export const HivemindSignalDomainSchema = z.enum([
+  'task',
+  'code',
+  'ownership',
+  'quality',
+  'security',
+  'progress',
+  'review',
+  'meta',
+]);
+
+export const HivemindSignalSeveritySchema = z.enum(['low', 'medium', 'high', 'critical']);
+
 // ---------------------------------------------------------------------------
 // Tool Finding
 // ---------------------------------------------------------------------------
@@ -348,6 +361,91 @@ export const OpenClawConfigSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
+// Hivemind v2 typed-state supervision draft schemas
+// ---------------------------------------------------------------------------
+
+export const HivemindBuilderProgressSchema = z.object({
+  taskId: z.string().min(1),
+  phase: z.enum(['analysis', 'implementation', 'testing', 'verification', 'complete', 'blocked']),
+  done: z.array(z.string()).default([]),
+  blockers: z.array(z.string()).default([]),
+  touchedFiles: z.array(z.string()).default([]),
+  proposedNext: z.array(z.string()).default([]),
+  needsReview: z.boolean(),
+  evidence: z.array(z.string()).default([]),
+});
+
+export const HivemindBaseSignalSchema = z.object({
+  id: z.string().min(1),
+  taskId: z.string().min(1),
+  domain: HivemindSignalDomainSchema,
+  kind: z.string().min(1),
+  source: z.string().min(1),
+  ts: z.string(),
+  value: z.unknown(),
+  confidence: z.number().min(0).max(1).optional(),
+  severity: HivemindSignalSeveritySchema.optional(),
+  refs: z.array(z.string()).default([]),
+  evidence: z.array(z.string()).default([]),
+  tags: z.array(z.string()).default([]),
+  owner: z.string().optional(),
+  supersedes: z.array(z.string()).default([]),
+});
+
+export const HivemindProgressSignalSchema = HivemindBaseSignalSchema.extend({
+  domain: z.literal('progress'),
+  value: HivemindBuilderProgressSchema,
+});
+
+export const HivemindStateBusSchema = z.object({
+  task: z.array(HivemindBaseSignalSchema).default([]),
+  code: z.array(HivemindBaseSignalSchema).default([]),
+  ownership: z.array(HivemindBaseSignalSchema).default([]),
+  quality: z.array(HivemindBaseSignalSchema).default([]),
+  security: z.array(HivemindBaseSignalSchema).default([]),
+  progress: z.array(HivemindProgressSignalSchema).default([]),
+  review: z.array(HivemindBaseSignalSchema).default([]),
+  meta: z.array(HivemindBaseSignalSchema).default([]),
+});
+
+export const HivemindReducedStatePacketSchema = z.object({
+  taskId: z.string().min(1),
+  summary: z.array(z.string()).default([]),
+  blockers: z.array(z.string()).default([]),
+  approvedFacts: z.array(z.string()).default([]),
+  conflicts: z.array(z.string()).default([]),
+  touchedFiles: z.array(z.string()).default([]),
+  evidenceRefs: z.array(z.string()).default([]),
+  risk: HivemindSignalSeveritySchema,
+});
+
+export const HivemindSupervisorVerdictSchema = z.object({
+  taskId: z.string().min(1),
+  action: z.enum(['accept', 'retry', 'block', 'review', 'escalate']),
+  confidence: z.number().min(0).max(1),
+  reasons: z.array(z.string()).default([]),
+  blockers: z.array(z.string()).default([]),
+  nextActions: z.array(z.string()).default([]),
+  approvedFiles: z.array(z.string()).optional(),
+  rejectedSignals: z.array(z.string()).optional(),
+  escalate: z.boolean().optional(),
+});
+
+export const HivemindReducerPacketSchema = z.object({
+  packetId: z.string().min(1),
+  taskId: z.string().min(1),
+  signalIds: z.array(z.string()).default([]),
+  summary: z.array(z.string()).default([]),
+  blockers: z.array(z.string()).default([]),
+  approvedFacts: z.array(z.string()).default([]),
+  conflicts: z.array(z.string()).default([]),
+  touchedFiles: z.array(z.string()).default([]),
+  evidenceRefs: z.array(z.string()).default([]),
+  risk: HivemindSignalSeveritySchema,
+  recommendedAction: z.enum(['accept', 'retry', 'block', 'review', 'escalate']),
+});
+
+// ---------------------------------------------------------------------------
 // Re-export types for convenience
 // ---------------------------------------------------------------------------
 
@@ -358,3 +456,9 @@ export type CondensedRelay300 = z.infer<typeof CondensedRelay300Schema>;
 export type ToolFinding = z.infer<typeof ToolFindingSchema>;
 export type OpenClawConfig = z.infer<typeof OpenClawConfigSchema>;
 export type OpenClawEvent = z.infer<typeof OpenClawEventSchema>;
+export type HivemindBuilderProgress = z.infer<typeof HivemindBuilderProgressSchema>;
+export type HivemindBaseSignal = z.infer<typeof HivemindBaseSignalSchema>;
+export type HivemindStateBus = z.infer<typeof HivemindStateBusSchema>;
+export type HivemindReducedStatePacket = z.infer<typeof HivemindReducedStatePacketSchema>;
+export type HivemindSupervisorVerdict = z.infer<typeof HivemindSupervisorVerdictSchema>;
+export type HivemindReducerPacket = z.infer<typeof HivemindReducerPacketSchema>;

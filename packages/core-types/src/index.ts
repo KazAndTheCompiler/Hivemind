@@ -540,3 +540,95 @@ export interface AgentReputation {
   lastRunAt: string;
   trustScore: number;
 }
+
+// ---------------------------------------------------------------------------
+// Hivemind v2 Typed-State Supervision Draft
+// ---------------------------------------------------------------------------
+
+export type HivemindSignalDomain =
+  | 'task'
+  | 'code'
+  | 'ownership'
+  | 'quality'
+  | 'security'
+  | 'progress'
+  | 'review'
+  | 'meta';
+
+export type HivemindSignalSeverity = 'low' | 'medium' | 'high' | 'critical';
+
+export interface HivemindBaseSignal<T = unknown> {
+  id: string;
+  taskId: string;
+  domain: HivemindSignalDomain;
+  kind: string;
+  source: string;
+  ts: string;
+  value: T;
+  confidence?: number;
+  severity?: HivemindSignalSeverity;
+  refs?: string[];
+  evidence?: string[];
+  tags?: string[];
+  owner?: string;
+  supersedes?: string[];
+}
+
+export interface HivemindStateBus {
+  task: HivemindBaseSignal[];
+  code: HivemindBaseSignal[];
+  ownership: HivemindBaseSignal[];
+  quality: HivemindBaseSignal[];
+  security: HivemindBaseSignal[];
+  progress: HivemindBaseSignal<HivemindBuilderProgress>[];
+  review: HivemindBaseSignal[];
+  meta: HivemindBaseSignal[];
+}
+
+export interface HivemindReducedStatePacket {
+  taskId: string;
+  summary: string[];
+  blockers: string[];
+  approvedFacts: string[];
+  conflicts: string[];
+  touchedFiles: string[];
+  evidenceRefs: string[];
+  risk: HivemindSignalSeverity;
+}
+
+export interface HivemindSupervisorVerdict {
+  taskId: string;
+  action: 'accept' | 'retry' | 'block' | 'review' | 'escalate';
+  confidence: number;
+  reasons: string[];
+  blockers: string[];
+  nextActions: string[];
+  approvedFiles?: string[];
+  rejectedSignals?: string[];
+  escalate?: boolean;
+}
+
+export interface HivemindBuilderProgress {
+  taskId: string;
+  phase: 'analysis' | 'implementation' | 'testing' | 'verification' | 'complete' | 'blocked';
+  done: string[];
+  blockers: string[];
+  touchedFiles: string[];
+  proposedNext: string[];
+  needsReview: boolean;
+  evidence: string[];
+}
+
+export interface HivemindReducerPacket {
+  packetId: string;
+  taskId: string;
+  signalIds: string[];
+  summary: string[];
+  blockers: string[];
+  approvedFacts: string[];
+  conflicts: string[];
+  touchedFiles: string[];
+  evidenceRefs: string[];
+  risk: HivemindSignalSeverity;
+  recommendedAction: 'accept' | 'retry' | 'block' | 'review' | 'escalate';
+}
