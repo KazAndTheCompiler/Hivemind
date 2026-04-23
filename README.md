@@ -40,6 +40,8 @@ Worker summary
 [memory] ← saves everything to disk
 ```
 
+When work is complete and ready to ship, Hivemind v2 can surface an optional supervisor `sanitize-and-ship` action for TruffleHog so final secret scanning happens right before push or release.
+
 ### Sherlock's Job
 
 File changes → Sherlock analyzes them → emits signals → Watson consumes them.

@@ -123,3 +123,19 @@ All events flow through the EventBus with a `kind` discriminator:
 - **Graceful shutdown**: All apps handle SIGTERM/SIGINT/SIGHUP
 - **No `any` types**: Strict TypeScript with `noImplicitAny`
 - **Zod validation**: All external data validated at boundaries
+
+## Hivemind v2 typed-state draft
+
+An initial typed-state supervision scaffold now exists for the planned summary-first → state-first migration.
+
+- Types live in `packages/core-types/src/index.ts`
+- Zod schemas live in `packages/core-schemas/src/index.ts`
+- A first deterministic Watson bridge lives in `packages/watson/src/hivemind-v2.ts`
+- Repo-specific notes live in:
+  - `docs/architecture/hivemind-v2-typed-state-scaffold.md`
+  - `docs/architecture/hivemind-v2-watson-bridge.md`
+  - `docs/architecture/hivemind-v2-migration-checklist.md`
+  - `docs/architecture/adr-0004-design-output-minimums.md`
+  - `docs/runbooks/secrets-and-binds.md`
+
+This is intentionally a draft substrate, not a full runtime cutover.
