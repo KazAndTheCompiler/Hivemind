@@ -51,4 +51,16 @@ describe('OrchestratorService', () => {
       timestamp: new Date().toISOString(),
     })).rejects.toThrow('Orchestrator is not running');
   });
+
+  it('healthCheck returns ok status when healthy', async () => {
+    await orchestrator.start();
+    const result = await orchestrator.healthCheck();
+    expect(result.status).toBe('ok');
+    expect(result.halted).toBe(false);
+    expect(typeof result.driftCounter).toBe('number');
+    expect(typeof result.uptimeMs).toBe('number');
+    expect(result.uptimeMs).toBeGreaterThanOrEqual(0);
+    expect(result.timestamp).toBeDefined();
+    await orchestrator.shutdown('test');
+  });
 });

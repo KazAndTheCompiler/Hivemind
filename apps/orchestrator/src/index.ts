@@ -33,6 +33,7 @@ import { CheckpointOrchestrator } from '@openclaw/automation-checkpoints';
 import { SummaryEmitter } from '@openclaw/automation-summary';
 import { GuardStack, createGuardStack } from '@openclaw/guard-stack';
 import * as fs from 'fs';
+import * as http from 'http';
 
 export interface ColdStartCheckResult {
   passed: boolean;
@@ -95,6 +96,16 @@ export interface HealthStatus {
   };
 }
 
+export interface HealthCheckResult {
+  status: 'ok' | 'halted' | 'degraded';
+  driftCounter: number;
+  halted: boolean;
+  circuitBreakerState?: string;
+  lastEventAt: string | null;
+  uptimeMs: number;
+  timestamp: string;
+}
+
 export class OrchestratorService {
   private config: OpenClawConfig;
   private logger: Logger;
@@ -126,6 +137,8 @@ export class OrchestratorService {
   private pendingOperations = new Set<Promise<unknown>>();
   private pipelineHalted = false;
   private pipelineRunPromise: Promise<void> | null = null;
+  private lastEventAt: string | null = null;
+  private healthServer: http.Server | null = null;
   private systemState: SystemState = {
     schemaVersion: 'v1',
     tasks: {},
@@ -182,6 +195,7 @@ export class OrchestratorService {
     this.routerSubscription = this.router.startListening();
 
     this.eventBus.onAny(async (event) => {
+      this.lastEventAt = event.timestamp;
       const op = this.trackOperation(this.auditStore.persist(event));
       this.pendingOperations.add(op);
       op.finally(() => this.pendingOperations.delete(op)).catch((err) => {
@@ -751,6 +765,65 @@ export class OrchestratorService {
       streamId: 'orchestrator',
       timestamp: new Date().toISOString(),
     });
+
+    this.startHealthServer();
+  }
+
+  private startHealthServer(): void {
+    this.healthServer = http.createServer(async (req, res) => {
+      if (req.method === 'GET' && req.url === '/health') {
+        const result = await this.healthCheck();
+        res.setHeader('Content-Type', 'application/json');
+        res.statusCode = result.status === 'ok' ? 200 : 503;
+        res.end(JSON.stringify(result));
+        return;
+      }
+      res.statusCode = 404;
+      res.end('Not Found');
+    });
+
+    this.healthServer.on('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EADDRINUSE') {
+        this.logger.warn('orchestrator.health_server.address_in_use', { port: 9090 });
+      } else {
+        this.logger.error('orchestrator.health_server.error', { error: err.message });
+      }
+    });
+
+    this.healthServer.listen(9090, () => {
+      this.logger.info('orchestrator.health_server.started', { port: 9090 });
+    });
+  }
+
+  async healthCheck(): Promise<HealthCheckResult> {
+    let circuitBreakerState: string | undefined;
+    for (const [name, cb] of this.circuitBreakers) {
+      if (cb.state === CircuitState.OPEN) {
+        circuitBreakerState = `${name}:open`;
+        break;
+      } else if (cb.state === CircuitState.HALF_OPEN && !circuitBreakerState) {
+        circuitBreakerState = `${name}:half_open`;
+      }
+    }
+
+    let status: 'ok' | 'halted' | 'degraded';
+    if (!this.running) {
+      status = 'degraded';
+    } else if (this.pipelineHalted) {
+      status = 'halted';
+    } else {
+      status = 'ok';
+    }
+
+    return {
+      status,
+      driftCounter: this.driftCounter,
+      halted: this.pipelineHalted,
+      circuitBreakerState,
+      lastEventAt: this.lastEventAt,
+      uptimeMs: Date.now() - this.startTime,
+      timestamp: new Date().toISOString(),
+    };
   }
 
   async shutdown(reason = 'manual'): Promise<void> {
@@ -760,6 +833,14 @@ export class OrchestratorService {
     }
 
     this.running = false;
+
+    if (this.healthServer) {
+      await new Promise<void>((resolve) => {
+        this.healthServer!.close(() => resolve());
+      });
+      this.healthServer = null;
+    }
+
     this.logger.info('orchestrator.shutdown.start', {
       reason,
       pendingOperations: this.pendingOperations.size,

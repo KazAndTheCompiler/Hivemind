@@ -286,10 +286,23 @@ export class DurableFileSink implements MemorySink {
 export class AgentMemory {
   private sink: MemorySink;
   private agentId: string;
+  private inbox: unknown[] = [];
+  private readonly MAX_INBOX = 10000;
 
   constructor(sink: MemorySink, agentId: string) {
     this.sink = sink;
     this.agentId = agentId;
+  }
+
+  bufferSize(): number {
+    return this.inbox.length;
+  }
+
+  add(entry: unknown): void {
+    if (this.inbox.length >= this.MAX_INBOX) {
+      this.inbox.shift();
+    }
+    this.inbox.push(entry);
   }
 
   async saveSummary(summary: NormalizedAgentSummary): Promise<void> {

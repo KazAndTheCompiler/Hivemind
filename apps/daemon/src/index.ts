@@ -18,6 +18,12 @@ import { DurableFileAuditStore } from '@openclaw/audit-store';
 const TOOL_TIMEOUT = 15_000;
 const MAX_CONCURRENT_TOOLS = 4;
 
+// Circuit breaker constants
+const FAILURE_THRESHOLD = 3;
+const CIRCUIT_OPEN_DURATION_MS = 30_000;
+
+type CircuitState = 'closed' | 'half-open' | 'open';
+
 export class WatchDaemon {
   private config: OpenClawConfig;
   private logger: Logger;
@@ -33,6 +39,9 @@ export class WatchDaemon {
   private startTime = Date.now();
   private pipelineRunPromise: Promise<void> | null = null; // Run coalescing
   private cancelToken: CancelToken | null = null; // Cancellation support
+  private circuitState: CircuitState = 'closed';
+  private failureCount = 0;
+  private lastFailureAt: number | null = null;
 
   constructor(config: OpenClawConfig) {
     this.config = config;
@@ -74,9 +83,9 @@ export class WatchDaemon {
     );
 
     // Audit all events
-    this.eventBus.onAny(async (event) => {
+    this.eventBus.onAny(async (event: unknown) => {
       try {
-        await this.auditStore.persist(event);
+        await this.auditStore.persist(event as Parameters<typeof this.auditStore.persist>[0]);
       } catch (err) {
         this.logger.error('daemon.audit.persist_error', {
           error: err instanceof Error ? err.message : String(err),
@@ -85,9 +94,12 @@ export class WatchDaemon {
     });
 
     // Set up dead-letter handler
-    this.eventBus.setDeadLetterHandler(async (event, reason) => {
+    this.eventBus.setDeadLetterHandler(async (event: unknown, reason: string) => {
       try {
-        await this.auditStore.persistDeadLetter(event, reason);
+        await this.auditStore.persistDeadLetter(
+          event as Parameters<typeof this.auditStore.persistDeadLetter>[0],
+          reason,
+        );
       } catch (err) {
         this.logger.error('daemon.dead_letter.persist_error', {
           reason,
@@ -107,13 +119,35 @@ export class WatchDaemon {
 
   async start(): Promise<void> {
     if (this.running) {
-      this.logger.warn('daemon.already.running');
+      this.logger.warn('daemon.already.running', {});
       return;
     }
 
     this.running = true;
-    this.logger.info('daemon.starting');
+    this.logger.info('daemon.starting', {});
 
+    // Circuit breaker: skip watch if circuit is open
+    if (this.circuitState === 'open') {
+      const retryIn = this.lastFailureAt !== null
+        ? Math.max(0, CIRCUIT_OPEN_DURATION_MS - (Date.now() - this.lastFailureAt))
+        : CIRCUIT_OPEN_DURATION_MS;
+      this.logger.warn('circuit breaker OPEN — skipping watch', { circuitState: 'open', retryInMs: retryIn });
+      return;
+    }
+
+    try {
+      await this._startWatcher();
+    } catch (err) {
+      this._recordWatchFailure(err);
+    }
+
+    // Graceful shutdown
+    process.on('SIGTERM', () => this.shutdown('SIGTERM'));
+    process.on('SIGINT', () => this.shutdown('SIGINT'));
+    process.on('SIGHUP', () => this.reload());
+  }
+
+  private async _startWatcher(): Promise<void> {
     this.watcher = chokidar.watch(this.config.daemon.watchPaths, {
       ignored: [/node_modules/, /dist/, /\.git/, /\.openclaw/],
       persistent: true,
@@ -126,15 +160,64 @@ export class WatchDaemon {
       .on('unlink', (filePath) => this.onFileChange(filePath))
       .on('error', (error) => {
         this.logger.error('daemon.watcher.error', { error: error.message });
+        this._recordWatchFailure(error);
       })
       .on('ready', () => {
         this.logger.info('daemon.ready', { watchedPaths: this.config.daemon.watchPaths });
       });
+  }
 
-    // Graceful shutdown
-    process.on('SIGTERM', () => this.shutdown('SIGTERM'));
-    process.on('SIGINT', () => this.shutdown('SIGINT'));
-    process.on('SIGHUP', () => this.reload());
+  private _recordWatchFailure(_err: unknown): void {
+    this.failureCount++;
+    this.lastFailureAt = Date.now();
+
+    if (this.circuitState === 'half-open') {
+      // Failure in half-open → stay open
+      this.logger.warn('circuit breaker OPEN — half-open attempt failed', {
+        circuitState: 'open',
+        failureCount: this.failureCount,
+        retryInMs: CIRCUIT_OPEN_DURATION_MS,
+      });
+      this.circuitState = 'open';
+      setTimeout(() => this._attemptReclose(), CIRCUIT_OPEN_DURATION_MS);
+      return;
+    }
+
+    if (this.failureCount >= FAILURE_THRESHOLD) {
+      this.circuitState = 'open';
+      this.logger.warn('circuit breaker OPEN — skipping watch', {
+        circuitState: 'open',
+        retryInMs: CIRCUIT_OPEN_DURATION_MS,
+      });
+      // Stop the watcher
+      if (this.watcher) {
+        this.watcher.close().catch(() => {
+          // ignore
+        });
+        this.watcher = null;
+      }
+      setTimeout(() => this._attemptReclose(), CIRCUIT_OPEN_DURATION_MS);
+    }
+  }
+
+  private async _attemptReclose(): Promise<void> {
+    if (this.circuitState !== 'open') return;
+    this.circuitState = 'half-open';
+    this.logger.info('circuit breaker HALF-OPEN — attempting watch', { circuitState: 'half-open' });
+    try {
+      await this._startWatcher();
+      // Success → close circuit
+      this.circuitState = 'closed';
+      this.failureCount = 0;
+      this.lastFailureAt = null;
+      this.logger.info('circuit breaker CLOSED — watch re-established', { circuitState: 'closed' });
+    } catch (_err) {
+      this._recordWatchFailure(_err);
+    }
+  }
+
+  get circuitBreakerState(): CircuitState {
+    return this.circuitState;
   }
 
   // ---------------------------------------------------------------------------
@@ -289,12 +372,14 @@ export class WatchDaemon {
   }
 
   private reload(): void {
-    this.logger.info('daemon.reload');
+    this.logger.info('daemon.reload', {});
     this.gitNexus.invalidatePackageCache();
     // In production, reload config and restart watcher
   }
 
-  get isRunning(): boolean { return this.running; }
+  get isRunning(): boolean {
+    return this.running;
+  }
 
   get status() {
     return this.getHealth();
