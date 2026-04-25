@@ -8,6 +8,7 @@ import type {
   CondensedRelay300,
   ToolFinding,
   Severity,
+  GraphSubgraph,
 } from '@openclaw/core-types';
 import { EventBus } from '@openclaw/core-events';
 import { Logger } from '@openclaw/core-logging';
@@ -20,9 +21,10 @@ export const FIELD_PRIORITY_MATRIX = {
   nextAction: 8,
   topFindings: 7,
   findings: 7,
-  touchedFiles: 5,
+  graphSnippet: 6,
   status: 6,
   severity: 6,
+  touchedFiles: 5,
   confidence: 4,
   version: 3,
   budget: 3,
@@ -39,18 +41,19 @@ export class WatsonFilter {
     this.logger = logger.child({ service: 'WatsonFilter' });
   }
 
-  condense(normalized: NormalizedAgentSummary): {
+  condense(normalized: NormalizedAgentSummary, subgraph?: GraphSubgraph): {
     relay200: CondensedRelay200;
     relay300: CondensedRelay300;
   } {
     const relay200 = this.build200(normalized);
-    const relay300 = this.build300(normalized);
+    const relay300 = this.build300(normalized, subgraph);
 
     this.logger.info('summary.condensed', {
       taskId: normalized.taskId,
       tokens200: countTokensObject(relay200),
       tokens300: countTokensObject(relay300),
       severity: relay200.severity,
+      hasGraphSnippet: !!relay300.graphSnippet,
     });
 
     return { relay200, relay300 };
@@ -58,8 +61,9 @@ export class WatsonFilter {
 
   async condenseAndEmit(
     normalized: NormalizedAgentSummary,
+    subgraph?: GraphSubgraph,
   ): Promise<{ relay200: CondensedRelay200; relay300: CondensedRelay300 }> {
-    const { relay200, relay300 } = this.condense(normalized);
+    const { relay200, relay300 } = this.condense(normalized, subgraph);
 
     await this.eventBus.emit({
       kind: 'relay.condensed',
@@ -95,7 +99,7 @@ export class WatsonFilter {
     return truncatePayloadToBudgetWithPriority<CondensedRelay200>(base, 200, FIELD_PRIORITY_MATRIX);
   }
 
-  private build300(normalized: NormalizedAgentSummary): CondensedRelay300 {
+  private build300(normalized: NormalizedAgentSummary, subgraph?: GraphSubgraph): CondensedRelay300 {
     const severity = this.computeSeverity(normalized);
     const rankedFindings = this.rankFindings(normalized.toolFindings);
 
@@ -113,6 +117,13 @@ export class WatsonFilter {
       severity,
       confidence: normalized.confidence,
     };
+
+    if (subgraph && subgraph.edges.length > 0) {
+      base.graphSnippet = subgraph.edges
+        .slice(0, 8)
+        .map(e => `${e.source}--${e.relation}->${e.target}[${e.confidence}]`)
+        .join('; ');
+    }
 
     return truncatePayloadToBudgetWithPriority<CondensedRelay300>(base, 300, FIELD_PRIORITY_MATRIX);
   }

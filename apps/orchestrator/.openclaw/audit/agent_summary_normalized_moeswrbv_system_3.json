@@ -1,0 +1,26 @@
+{
+  "id": "agent_summary_normalized_moeswrbv_system_3",
+  "event": {
+    "kind": "agent.summary.normalized",
+    "schemaVersion": "v1",
+    "sequence": 3,
+    "streamId": "smoke-1",
+    "normalized": {
+      "taskId": "smoke-1",
+      "agentId": "test-worker",
+      "status": "done",
+      "conciseSummary": "Smoke test completed successfully",
+      "touchedFiles": [
+        "src/test.ts"
+      ],
+      "blockers": [],
+      "nextActions": [],
+      "confidence": 0.95,
+      "tags": [],
+      "toolFindings": [],
+      "timestamp": "2026-04-25T20:37:50.291Z"
+    },
+    "timestamp": "2026-04-25T20:37:50.299Z"
+  },
+  "persistedAt": "2026-04-25T20:37:50.299Z"
+}

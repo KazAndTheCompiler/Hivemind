@@ -25,7 +25,7 @@ export type ToolSeverity = 'info' | 'low' | 'medium' | 'high' | 'critical';
 // Tool Finding
 // ---------------------------------------------------------------------------
 
-export type ToolSource = 'secdev' | 'gitnexus' | 'eslint' | 'prettier' | 'system';
+export type ToolSource = 'secdev' | 'gitnexus' | 'eslint' | 'prettier' | 'system' | 'graphify';
 
 export interface ToolFinding {
   source: ToolSource;
@@ -34,6 +34,73 @@ export interface ToolFinding {
   message: string;
   fileRefs: string[];
   suggestedAction?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Graph Types (graphify integration)
+// ---------------------------------------------------------------------------
+
+export type EdgeConfidence = 'EXTRACTED' | 'INFERRED' | 'AMBIGUOUS';
+export type EdgeRelation =
+  | 'calls' | 'implements' | 'references' | 'imports'
+  | 'contains' | 'shares_data_with';
+
+export interface GraphNode {
+  id: string;
+  label: string;
+  file_type: string;
+  source_file: string;
+  source_location: string | null;
+}
+
+export interface GraphEdge {
+  source: string;
+  target: string;
+  relation: EdgeRelation;
+  confidence: EdgeConfidence;
+  confidence_score: number;
+  source_file: string;
+}
+
+/** Budget-constrained subgraph extracted for a specific query or change set */
+export interface GraphSubgraph {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  tokenCost: number;
+  traversalMode: 'bfs' | 'dfs';
+  startNodeIds: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Diff Schema (enhanced gitnexus)
+// ---------------------------------------------------------------------------
+
+export type ChangedFileStatus = 'added' | 'modified' | 'deleted' | 'renamed';
+
+export interface DiffHunk {
+  oldStart: number;
+  oldLines: number;
+  newStart: number;
+  newLines: number;
+  heading: string;
+}
+
+export interface DiffSchema {
+  file: string;
+  status: ChangedFileStatus;
+  addedLines: number;
+  removedLines: number;
+  hunks: DiffHunk[];
+  impactedSymbols: string[];
+  packageOwner: string | null;
+}
+
+/** Composite context produced by daemon for orchestrator consumption */
+export interface ChangeContext {
+  changedFiles: DiffSchema[];
+  subgraph: GraphSubgraph | null;
+  packageNames: string[];
+  timestamp: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -64,6 +131,7 @@ export interface NormalizedAgentSummary {
   confidence: number;
   tags: string[];
   toolFindings: ToolFinding[];
+  graphContext?: GraphSubgraph;
   timestamp: string;
 }
 
@@ -96,6 +164,7 @@ export interface CondensedRelay300 {
   blockers: string[];
   nextActions: string[];
   topFindings: ToolFinding[];
+  graphSnippet?: string;
   severity: Severity;
   confidence: number;
 }
@@ -272,6 +341,27 @@ export interface GitNexusChangeDetectedEvent {
   timestamp: string;
 }
 
+export interface GraphifyUpdatedEvent {
+  kind: 'graphify.graph.updated';
+  schemaVersion: SchemaVersion;
+  sequence: number;
+  streamId: string;
+  nodeCount: number;
+  edgeCount: number;
+  changedFiles: string[];
+  durationMs: number;
+  timestamp: string;
+}
+
+export interface ChangeContextEvent {
+  kind: 'change.context.ready';
+  schemaVersion: SchemaVersion;
+  sequence: number;
+  streamId: string;
+  context: ChangeContext;
+  timestamp: string;
+}
+
 // Discriminated union of all event kinds
 export type OpenClawEvent =
   | FileChangeEvent
@@ -289,7 +379,9 @@ export type OpenClawEvent =
   | WorkerEmitEvent
   | RelayDeliveredEvent
   | RelayDeliveryFailedEvent
-  | GitNexusChangeDetectedEvent;
+  | GitNexusChangeDetectedEvent
+  | GraphifyUpdatedEvent
+  | ChangeContextEvent;
 
 export type OpenClawEventKind = OpenClawEvent['kind'];
 
@@ -353,6 +445,12 @@ export interface OpenClawConfig {
     prettier: {
       enabled: boolean;
       configFile?: string;
+    };
+    graphify: {
+      enabled: boolean;
+      venvPath?: string;
+      graphPath?: string;
+      queryBudget?: number;
     };
   };
   audit: {

@@ -1,0 +1,12 @@
+{
+  "id": "orchestrator_shutdown_moeswqzz_system_2",
+  "event": {
+    "kind": "orchestrator.shutdown",
+    "schemaVersion": "v1",
+    "sequence": 2,
+    "streamId": "orchestrator",
+    "reason": "test",
+    "timestamp": "2026-04-25T20:37:49.871Z"
+  },
+  "persistedAt": "2026-04-25T20:37:49.871Z"
+}

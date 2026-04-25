@@ -1,0 +1,11 @@
+{
+  "id": "orchestrator_started_moeswqtq_system_1",
+  "event": {
+    "kind": "orchestrator.started",
+    "schemaVersion": "v1",
+    "sequence": 1,
+    "streamId": "orchestrator",
+    "timestamp": "2026-04-25T20:37:49.642Z"
+  },
+  "persistedAt": "2026-04-25T20:37:49.646Z"
+}

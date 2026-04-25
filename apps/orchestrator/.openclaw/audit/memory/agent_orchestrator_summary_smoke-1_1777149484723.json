@@ -1,0 +1,39 @@
+{
+  "taskId": "smoke-1",
+  "agentId": "test-worker",
+  "status": "done",
+  "conciseSummary": "Smoke test completed successfully",
+  "touchedFiles": [
+    "src/test.ts"
+  ],
+  "blockers": [],
+  "nextActions": [],
+  "confidence": 0.95,
+  "tags": [],
+  "toolFindings": [
+    {
+      "source": "prettier",
+      "severity": "medium",
+      "code": "PRETTIER_FORMAT_FAILED",
+      "message": "Prettier failed to format: src/test.ts",
+      "fileRefs": [
+        "src/test.ts"
+      ]
+    },
+    {
+      "source": "prettier",
+      "severity": "high",
+      "code": "TOOL_CRASH",
+      "message": "Prettier crashed: Command failed: npx prettier --write src/test.ts\n[error] No files matching the pattern were found: \"src/test.ts\".\n",
+      "fileRefs": []
+    },
+    {
+      "source": "eslint",
+      "severity": "high",
+      "code": "TOOL_CRASH",
+      "message": "ESLint crashed: \nOops! Something went wrong! :(\n\nESLint: 8.57.1\n\nNo files matching the pattern \"src/test.ts\" were found.\nPlease check for typing mistakes in the pattern.\n\n",
+      "fileRefs": []
+    }
+  ],
+  "timestamp": "2026-04-25T20:37:50.291Z"
+}

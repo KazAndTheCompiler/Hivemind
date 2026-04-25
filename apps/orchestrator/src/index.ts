@@ -15,6 +15,7 @@ import type {
   TaskState,
   PipelineLock,
   ToolFinding,
+  ChangeContext,
 } from '@openclaw/core-types';
 import { EventBus, Subscription } from '@openclaw/core-events';
 import { Logger, createLoggerFromConfig } from '@openclaw/core-logging';
@@ -112,6 +113,7 @@ export class OrchestratorService {
   private summaryEmitter: SummaryEmitter;
   private guardStack: GuardStack;
   private routerSubscription: Subscription | null = null;
+  private latestChangeContext: ChangeContext | null = null;
   private driftCounter = 0;
   private readonly DRIFT_THRESHOLD = 3;
   private readonly CIRCUIT_FAILURE_THRESHOLD = 5;
@@ -134,10 +136,10 @@ export class OrchestratorService {
     globalSequence: 0,
   };
 
-  constructor(config: OpenClawConfig) {
+  constructor(config: OpenClawConfig, eventBus?: EventBus) {
     this.config = config;
     this.logger = createLoggerFromConfig(config);
-    this.eventBus = new EventBus(this.logger);
+    this.eventBus = eventBus ?? new EventBus(this.logger);
 
     this.auditStore = new DurableFileAuditStore(
       config.audit.storePath,
@@ -180,6 +182,16 @@ export class OrchestratorService {
     this.memory = new AgentMemory(memorySink, 'orchestrator');
 
     this.routerSubscription = this.router.startListening();
+
+    // Subscribe to change context events from daemon (via shared EventBus)
+    this.eventBus.on('change.context.ready', async (event) => {
+      this.latestChangeContext = event.context;
+      this.logger.info('orchestrator.change_context.received', {
+        fileCount: event.context.changedFiles.length,
+        hasSubgraph: event.context.subgraph !== null,
+        subgraphNodes: event.context.subgraph?.nodes.length ?? 0,
+      });
+    });
 
     this.eventBus.onAny(async (event) => {
       const op = this.trackOperation(this.auditStore.persist(event));
@@ -295,6 +307,16 @@ export class OrchestratorService {
       t = Date.now();
       const normalized = await this.normalizationService.normalizeAndEmit(sanitized);
       record('normalize', true, t);
+
+      // Inject graph context from daemon's ChangeContext if available
+      if (this.latestChangeContext?.subgraph) {
+        normalized.graphContext = this.latestChangeContext.subgraph;
+        for (const edge of this.latestChangeContext.subgraph.edges.slice(0, 5)) {
+          if (edge.confidence === 'EXTRACTED') {
+            normalized.tags.push(`graph:${edge.source}--${edge.relation}->${edge.target}`);
+          }
+        }
+      }
 
       t = Date.now();
       let secdevFindings: ToolFinding[] = [];
@@ -437,7 +459,10 @@ export class OrchestratorService {
       }
 
       t = Date.now();
-      const { relay200, relay300 } = await this.condenseService.condenseAndEmit(normalized);
+      const { relay200, relay300 } = await this.condenseService.condenseAndEmit(
+        normalized,
+        this.latestChangeContext?.subgraph ?? undefined,
+      );
       record('condense', true, t);
 
       t = Date.now();

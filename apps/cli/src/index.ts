@@ -1,9 +1,10 @@
 // OpenClaw CLI entry point
 
-import { createOrchestrator } from '@openclaw/orchestrator';
-import { createDaemon } from '@openclaw/daemon';
+import { OrchestratorService, createOrchestrator } from '@openclaw/orchestrator';
+import { WatchDaemon, createDaemon } from '@openclaw/daemon';
 import { ConfigService } from '@openclaw/core-config';
 import { createLogger } from '@openclaw/core-logging';
+import { EventBus } from '@openclaw/core-events';
 
 function printUsage(): void {
   console.log(`
@@ -15,6 +16,7 @@ Usage:
 Commands:
   start             Start the orchestrator (foreground)
   daemon            Start the watch daemon
+  start-all         Start daemon + orchestrator with shared EventBus
   status            Show orchestrator health status
   health            Show orchestrator health (alias for status)
   config            Show current configuration
@@ -94,6 +96,42 @@ async function cmdConfig(): Promise<void> {
   }
 }
 
+async function cmdStartAll(): Promise<void> {
+  const logger = createLogger();
+  logger.info('cli.start', { command: 'start-all' });
+
+  const configService = ConfigService.fromFileOrDefaults(process.env.OPENCLAW_CONFIG);
+  const config = configService.getConfig();
+  ConfigService.validateStartup(config);
+
+  // Create a shared EventBus so daemon events (change.context.ready) reach the orchestrator
+  const sharedBus = new EventBus(logger);
+
+  const daemon = new WatchDaemon(config, sharedBus);
+  const orchestrator = new OrchestratorService(config, sharedBus);
+
+  await orchestrator.start();
+  await daemon.start();
+
+  logger.info('cli.start_all.running', {
+    graphifyEnabled: config.tools.graphify?.enabled ?? false,
+  });
+
+  const shutdown = async (signal: string) => {
+    logger.info('cli.shutdown.signal', { signal });
+    await Promise.all([
+      daemon.shutdown(signal),
+      orchestrator.shutdown(signal),
+    ]);
+    process.exit(0);
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+
+  await new Promise(() => {});
+}
+
 async function main(): Promise<void> {
   const command = process.argv[2] ?? 'help';
 
@@ -103,6 +141,9 @@ async function main(): Promise<void> {
       break;
     case 'daemon':
       await cmdDaemon();
+      break;
+    case 'start-all':
+      await cmdStartAll();
       break;
     case 'status':
     case 'health':

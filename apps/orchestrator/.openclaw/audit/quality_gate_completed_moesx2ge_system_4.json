@@ -1,0 +1,55 @@
+{
+  "id": "quality_gate_completed_moesx2ge_system_4",
+  "event": {
+    "kind": "quality.gate.completed",
+    "schemaVersion": "v1",
+    "sequence": 4,
+    "streamId": "src/test.ts",
+    "changedFiles": [
+      "src/test.ts"
+    ],
+    "prettier": {
+      "ran": true,
+      "formattedFiles": [],
+      "failedFiles": [
+        "src/test.ts"
+      ]
+    },
+    "eslint": {
+      "ran": false,
+      "fixedFiles": [],
+      "failedFiles": [
+        "src/test.ts"
+      ],
+      "warnings": 0,
+      "errors": 0
+    },
+    "findings": [
+      {
+        "source": "prettier",
+        "severity": "medium",
+        "code": "PRETTIER_FORMAT_FAILED",
+        "message": "Prettier failed to format: src/test.ts",
+        "fileRefs": [
+          "src/test.ts"
+        ]
+      },
+      {
+        "source": "prettier",
+        "severity": "high",
+        "code": "TOOL_CRASH",
+        "message": "Prettier crashed: Command failed: npx prettier --write src/test.ts\n[error] No files matching the pattern were found: \"src/test.ts\".\n",
+        "fileRefs": []
+      },
+      {
+        "source": "eslint",
+        "severity": "high",
+        "code": "TOOL_CRASH",
+        "message": "ESLint crashed: \nOops! Something went wrong! :(\n\nESLint: 8.57.1\n\nNo files matching the pattern \"src/test.ts\" were found.\nPlease check for typing mistakes in the pattern.\n\n",
+        "fileRefs": []
+      }
+    ],
+    "timestamp": "2026-04-25T20:38:04.717Z"
+  },
+  "persistedAt": "2026-04-25T20:38:04.718Z"
+}

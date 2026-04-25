@@ -13,7 +13,7 @@ export const SeveritySchema = z.enum(['none', 'low', 'medium', 'high', 'critical
 
 export const ToolSeveritySchema = z.enum(['info', 'low', 'medium', 'high', 'critical']);
 
-export const ToolSourceSchema = z.enum(['secdev', 'gitnexus', 'eslint', 'prettier', 'system']);
+export const ToolSourceSchema = z.enum(['secdev', 'gitnexus', 'eslint', 'prettier', 'system', 'graphify']);
 
 // ---------------------------------------------------------------------------
 // Tool Finding
@@ -26,6 +26,73 @@ export const ToolFindingSchema = z.object({
   message: z.string().min(1),
   fileRefs: z.array(z.string()).default([]),
   suggestedAction: z.string().optional(),
+});
+
+// ---------------------------------------------------------------------------
+// Graph Types (graphify integration)
+// ---------------------------------------------------------------------------
+
+export const EdgeConfidenceSchema = z.enum(['EXTRACTED', 'INFERRED', 'AMBIGUOUS']);
+
+export const EdgeRelationSchema = z.enum([
+  'calls', 'implements', 'references', 'imports',
+  'contains', 'shares_data_with',
+]);
+
+export const GraphNodeSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  file_type: z.string(),
+  source_file: z.string(),
+  source_location: z.string().nullable(),
+});
+
+export const GraphEdgeSchema = z.object({
+  source: z.string(),
+  target: z.string(),
+  relation: EdgeRelationSchema,
+  confidence: EdgeConfidenceSchema,
+  confidence_score: z.number().min(0).max(1),
+  source_file: z.string(),
+});
+
+export const GraphSubgraphSchema = z.object({
+  nodes: z.array(GraphNodeSchema),
+  edges: z.array(GraphEdgeSchema),
+  tokenCost: z.number().nonnegative(),
+  traversalMode: z.enum(['bfs', 'dfs']),
+  startNodeIds: z.array(z.string()),
+});
+
+// ---------------------------------------------------------------------------
+// Diff Schema (enhanced gitnexus)
+// ---------------------------------------------------------------------------
+
+export const ChangedFileStatusSchema = z.enum(['added', 'modified', 'deleted', 'renamed']);
+
+export const DiffHunkSchema = z.object({
+  oldStart: z.number().int().nonnegative(),
+  oldLines: z.number().int().nonnegative(),
+  newStart: z.number().int().nonnegative(),
+  newLines: z.number().int().nonnegative(),
+  heading: z.string(),
+});
+
+export const DiffSchemaSchema = z.object({
+  file: z.string(),
+  status: ChangedFileStatusSchema,
+  addedLines: z.number().int().nonnegative(),
+  removedLines: z.number().int().nonnegative(),
+  hunks: z.array(DiffHunkSchema),
+  impactedSymbols: z.array(z.string()),
+  packageOwner: z.string().nullable(),
+});
+
+export const ChangeContextSchema = z.object({
+  changedFiles: z.array(DiffSchemaSchema),
+  subgraph: GraphSubgraphSchema.nullable(),
+  packageNames: z.array(z.string()),
+  timestamp: z.string(),
 });
 
 // ---------------------------------------------------------------------------
@@ -56,6 +123,7 @@ export const NormalizedAgentSummarySchema = z.object({
   confidence: z.number().min(0).max(1),
   tags: z.array(z.string()).default([]),
   toolFindings: z.array(ToolFindingSchema).default([]),
+  graphContext: GraphSubgraphSchema.optional(),
   timestamp: z.string(),
 });
 
@@ -88,6 +156,7 @@ export const CondensedRelay300Schema = z.object({
   blockers: z.array(z.string()).default([]),
   nextActions: z.array(z.string()).default([]),
   topFindings: z.array(ToolFindingSchema).default([]),
+  graphSnippet: z.string().optional(),
   severity: SeveritySchema,
   confidence: z.number().min(0).max(1),
 });
@@ -263,6 +332,27 @@ export const GitNexusChangeDetectedEventSchema = z.object({
   timestamp: z.string(),
 });
 
+export const GraphifyUpdatedEventSchema = z.object({
+  kind: z.literal('graphify.graph.updated'),
+  schemaVersion: z.literal('v1'),
+  sequence: z.number().int().nonnegative(),
+  streamId: z.string(),
+  nodeCount: z.number().int().nonnegative(),
+  edgeCount: z.number().int().nonnegative(),
+  changedFiles: z.array(z.string()),
+  durationMs: z.number().int().nonnegative(),
+  timestamp: z.string(),
+});
+
+export const ChangeContextEventSchema = z.object({
+  kind: z.literal('change.context.ready'),
+  schemaVersion: z.literal('v1'),
+  sequence: z.number().int().nonnegative(),
+  streamId: z.string(),
+  context: ChangeContextSchema,
+  timestamp: z.string(),
+});
+
 // Discriminated union of all OpenClaw events
 export const OpenClawEventSchema = z.discriminatedUnion('kind', [
   FileChangeEventSchema,
@@ -280,6 +370,8 @@ export const OpenClawEventSchema = z.discriminatedUnion('kind', [
   RelayDeliveredEventSchema,
   RelayDeliveryFailedEventSchema,
   GitNexusChangeDetectedEventSchema,
+  GraphifyUpdatedEventSchema,
+  ChangeContextEventSchema,
 ]);
 
 // ---------------------------------------------------------------------------
@@ -329,6 +421,14 @@ export const OpenClawConfigSchema = z.object({
           configFile: z.string().optional(),
         })
         .default({}),
+      graphify: z
+        .object({
+          enabled: z.boolean().default(false),
+          venvPath: z.string().optional(),
+          graphPath: z.string().optional(),
+          queryBudget: z.number().int().positive().default(500),
+        })
+        .default({}),
     })
     .default({}),
   audit: z
@@ -358,3 +458,9 @@ export type CondensedRelay300 = z.infer<typeof CondensedRelay300Schema>;
 export type ToolFinding = z.infer<typeof ToolFindingSchema>;
 export type OpenClawConfig = z.infer<typeof OpenClawConfigSchema>;
 export type OpenClawEvent = z.infer<typeof OpenClawEventSchema>;
+export type GraphNode = z.infer<typeof GraphNodeSchema>;
+export type GraphEdge = z.infer<typeof GraphEdgeSchema>;
+export type GraphSubgraph = z.infer<typeof GraphSubgraphSchema>;
+export type DiffSchema = z.infer<typeof DiffSchemaSchema>;
+export type DiffHunk = z.infer<typeof DiffHunkSchema>;
+export type ChangeContext = z.infer<typeof ChangeContextSchema>;

@@ -7,6 +7,7 @@ const execFileAsync = promisify(execFile);
 
 import { EventBus } from '@openclaw/core-events';
 import { Logger } from '@openclaw/core-logging';
+import type { DiffSchema, DiffHunk, ChangedFileStatus } from '@openclaw/core-types';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -17,7 +18,7 @@ import * as fs from 'fs';
 export interface ChangedFile {
   path: string;
   status: 'added' | 'modified' | 'deleted' | 'renamed';
-  diff?: { added: number; removed: number };
+  diff?: { added: number; removed: number; hunks?: DiffHunk[] };
 }
 
 export interface GitNexusResult {
@@ -32,6 +33,7 @@ export interface GitNexusAdapter {
   resolveFileOwnership(filePath: string): Promise<string | null>;
   classifyFile(filePath: string): Promise<{ type: string; language: string }>;
   emitEvents(result: GitNexusResult): Promise<void>;
+  diffToSchema(baseRef?: string): Promise<DiffSchema[]>;
 }
 
 // ---------------------------------------------------------------------------
@@ -56,6 +58,13 @@ export class LocalGitNexusAdapter implements GitNexusAdapter {
         cwd: this.workDir,
         timeout: 30_000,
       });
+
+      const { stdout: numstat } = await execFileAsync('git', ['diff', '--numstat', baseRef], {
+        cwd: this.workDir,
+        timeout: 30_000,
+      });
+
+      const lineCounts = this.parseNumstat(numstat);
 
       const changedFiles: ChangedFile[] = [];
       let addedCount = 0;
@@ -82,7 +91,12 @@ export class LocalGitNexusAdapter implements GitNexusAdapter {
           modifiedCount++;
         }
 
-        changedFiles.push({ path: filePath, status });
+        const counts = lineCounts.get(filePath);
+        changedFiles.push({
+          path: filePath,
+          status,
+          diff: counts ? { added: counts.added, removed: counts.removed } : undefined,
+        });
       }
 
       // Resolve package ownership for all changed files
@@ -212,6 +226,49 @@ export class LocalGitNexusAdapter implements GitNexusAdapter {
   }
 
   /**
+   * Produce structured diff schemas with real line counts and package owners.
+   * Combines git diff --name-status and --numstat into typed DiffSchema[] output.
+   */
+  async diffToSchema(baseRef = 'HEAD'): Promise<DiffSchema[]> {
+    try {
+      const { stdout: nameStatus } = await execFileAsync(
+        'git', ['diff', '--name-status', baseRef],
+        { cwd: this.workDir, timeout: 30_000 },
+      );
+
+      const { stdout: numstat } = await execFileAsync(
+        'git', ['diff', '--numstat', baseRef],
+        { cwd: this.workDir, timeout: 30_000 },
+      );
+
+      const files = this.parseNameStatus(nameStatus);
+      const lineCounts = this.parseNumstat(numstat);
+
+      const schemas: DiffSchema[] = [];
+      for (const file of files) {
+        const owner = await this.resolveFileOwnership(file.path);
+        const counts = lineCounts.get(file.path) ?? { added: 0, removed: 0 };
+
+        schemas.push({
+          file: file.path,
+          status: file.status as ChangedFileStatus,
+          addedLines: counts.added,
+          removedLines: counts.removed,
+          hunks: [],
+          impactedSymbols: [],
+          packageOwner: owner,
+        });
+      }
+
+      return schemas;
+    } catch (err) {
+      throw new Error(
+        `Failed to generate diff schema: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  /**
    * Build a map of directory -> package name by scanning workspace.
    * Walks the workspace to discover all package.json files and their
    * containing directories.
@@ -263,5 +320,36 @@ export class LocalGitNexusAdapter implements GitNexusAdapter {
     if (['md'].includes(ext)) return 'doc';
     if (['yaml', 'yml'].includes(ext)) return 'config';
     return 'other';
+  }
+
+  private parseNameStatus(stdout: string): Array<{ path: string; status: string }> {
+    const files: Array<{ path: string; status: string }> = [];
+    for (const line of stdout.split('\n').filter(Boolean)) {
+      const parts = line.split('\t');
+      const statusCode = parts[0];
+      const filePath = parts[1] ?? parts[0];
+
+      let status = 'modified';
+      if (statusCode === 'A') status = 'added';
+      else if (statusCode === 'D') status = 'deleted';
+      else if (statusCode.startsWith('R')) status = 'renamed';
+
+      files.push({ path: filePath, status });
+    }
+    return files;
+  }
+
+  private parseNumstat(stdout: string): Map<string, { added: number; removed: number }> {
+    const result = new Map<string, { added: number; removed: number }>();
+    for (const line of stdout.split('\n').filter(Boolean)) {
+      const parts = line.split('\t');
+      if (parts.length >= 3) {
+        const added = parts[0] === '-' ? 0 : parseInt(parts[0], 10) || 0;
+        const removed = parts[1] === '-' ? 0 : parseInt(parts[1], 10) || 0;
+        const filePath = parts[2];
+        result.set(filePath, { added, removed });
+      }
+    }
+    return result;
   }
 }

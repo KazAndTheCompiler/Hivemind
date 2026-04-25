@@ -23,6 +23,7 @@
     "@openclaw/core-logging": "workspace:*",
     "@openclaw/core-errors": "workspace:*",
     "@openclaw/tool-gitnexus": "workspace:*",
+    "@openclaw/tool-graphify": "workspace:*",
     "@openclaw/tool-eslint": "workspace:*",
     "@openclaw/tool-prettier": "workspace:*",
     "@openclaw/tool-secdev": "workspace:*",

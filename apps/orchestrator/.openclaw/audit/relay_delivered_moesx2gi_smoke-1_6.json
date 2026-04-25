@@ -1,0 +1,14 @@
+{
+  "id": "relay_delivered_moesx2gi_smoke-1_6",
+  "event": {
+    "kind": "relay.delivered",
+    "schemaVersion": "v1",
+    "sequence": 6,
+    "streamId": "smoke-1",
+    "taskId": "smoke-1",
+    "severity": "high",
+    "inboxSize": 1,
+    "timestamp": "2026-04-25T20:38:04.722Z"
+  },
+  "persistedAt": "2026-04-25T20:38:04.722Z"
+}

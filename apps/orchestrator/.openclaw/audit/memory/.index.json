@@ -1,0 +1,11 @@
+{
+  "agent:orchestrator:summary:smoke-1": {
+    "file": "agent_orchestrator_summary_smoke-1_1777149484723.json"
+  },
+  "agent:orchestrator:relay:smoke-1:200": {
+    "file": "agent_orchestrator_relay_smoke-1_200_1777149484723.json"
+  },
+  "agent:orchestrator:relay:smoke-1:300": {
+    "file": "agent_orchestrator_relay_smoke-1_300_1777149484723.json"
+  }
+}

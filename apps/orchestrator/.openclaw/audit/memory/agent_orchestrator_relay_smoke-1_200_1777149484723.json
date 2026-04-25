@@ -1,0 +1,15 @@
+{
+  "version": "relay.v1",
+  "budget": 200,
+  "taskId": "smoke-1",
+  "agentId": "test-worker",
+  "status": "done",
+  "summary": "Smoke test completed successfully",
+  "touchedFiles": [
+    "src/test.ts"
+  ],
+  "blockers": [],
+  "nextAction": null,
+  "severity": "high",
+  "confidence": 0.95
+}
