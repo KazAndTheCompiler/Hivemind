@@ -4,6 +4,10 @@ import {
   CondensedRelay200Schema,
   OpenClawEventSchema,
   OpenClawConfigSchema,
+  HivemindStateBusSchema,
+  HivemindSupervisorVerdictSchema,
+  HivemindBuilderProgressSchema,
+  HivemindReducerPacketSchema,
 } from './index';
 
 describe('RawAgentSummarySchema', () => {
@@ -147,5 +151,104 @@ describe('OpenClawConfigSchema', () => {
     };
     const result = OpenClawConfigSchema.safeParse(config);
     expect(result.success).toBe(true);
+  });
+});
+
+describe('Hivemind v2 typed-state schemas', () => {
+  it('validates a progress-aware state bus draft', () => {
+    const stateBus = {
+      task: [],
+      code: [],
+      ownership: [],
+      quality: [],
+      security: [],
+      progress: [
+        {
+          id: 'sig-1',
+          taskId: 'task-1',
+          domain: 'progress',
+          kind: 'builder.progress',
+          source: 'builder',
+          ts: '2026-04-22T14:00:00Z',
+          value: {
+            taskId: 'task-1',
+            phase: 'implementation',
+            done: ['added draft schema types'],
+            blockers: [],
+            touchedFiles: ['packages/core-types/src/index.ts'],
+            proposedNext: ['add zod schemas'],
+            needsReview: false,
+            evidence: ['diff:packages/core-types/src/index.ts'],
+            supervisorOptions: [],
+          },
+          refs: ['packages/core-types/src/index.ts'],
+          evidence: ['diff:packages/core-types/src/index.ts'],
+        },
+      ],
+      review: [],
+      meta: [],
+    };
+
+    expect(HivemindStateBusSchema.safeParse(stateBus).success).toBe(true);
+  });
+
+  it('validates supervisor verdict draft', () => {
+    const verdict = {
+      taskId: 'task-1',
+      action: 'retry',
+      confidence: 0.71,
+      reasons: ['missing ownership evidence'],
+      blockers: [],
+      nextActions: ['attach gitnexus ownership signal'],
+      rejectedSignals: ['sig-2'],
+    };
+
+    expect(HivemindSupervisorVerdictSchema.safeParse(verdict).success).toBe(true);
+  });
+
+  it('rejects blocked progress without blocker details only if schema shape is wrong', () => {
+    const invalid = {
+      taskId: 'task-1',
+      phase: 'blocked',
+      done: [],
+      blockers: 'ownership unknown',
+      touchedFiles: [],
+      proposedNext: [],
+      needsReview: true,
+      evidence: [],
+      supervisorOptions: [],
+    };
+
+    expect(HivemindBuilderProgressSchema.safeParse(invalid).success).toBe(false);
+  });
+
+  it('validates reducer packet draft', () => {
+    const packet = {
+      packetId: 'pkt-1',
+      taskId: 'task-1',
+      signalIds: ['sig-1', 'sig-2'],
+      summary: ['builder updated typed-state drafts'],
+      blockers: [],
+      approvedFacts: ['changes limited to core-types and core-schemas'],
+      conflicts: [],
+      touchedFiles: ['packages/core-types/src/index.ts', 'packages/core-schemas/src/index.ts'],
+      evidenceRefs: ['diff:core-types', 'diff:core-schemas'],
+      supervisorOptions: [
+        {
+          id: 'sanitize-and-ship.trufflehog',
+          stage: 'sanitize-and-ship',
+          label: 'Run TruffleHog before push or release',
+          tool: 'trufflehog',
+          enabledByDefault: false,
+          rationale: 'Optional pre-ship secret scan',
+          command: ['trufflehog', 'git', 'file://.', '--results=verified,unknown', '--fail'],
+          activationHints: ['Run before push'],
+        },
+      ],
+      risk: 'medium',
+      recommendedAction: 'accept',
+    };
+
+    expect(HivemindReducerPacketSchema.safeParse(packet).success).toBe(true);
   });
 });

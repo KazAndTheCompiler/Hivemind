@@ -6,6 +6,10 @@ import type {
   NormalizedAgentSummary,
   CondensedRelay200,
   CondensedRelay300,
+  HivemindBaseSignal,
+  HivemindBuilderProgress,
+  HivemindReducedStatePacket,
+  HivemindReducerPacket,
   ToolFinding,
   Severity,
   GraphSubgraph,
@@ -13,6 +17,11 @@ import type {
 import { EventBus } from '@openclaw/core-events';
 import { Logger } from '@openclaw/core-logging';
 import { countTokensObject } from '@openclaw/core-tokenizer';
+import {
+  buildProgressSignal,
+  buildReducedStatePacket,
+  buildReducerPacket,
+} from './hivemind-v2';
 
 export const FIELD_PRIORITY_MATRIX = {
   summary: 10,
@@ -31,6 +40,14 @@ export const FIELD_PRIORITY_MATRIX = {
   taskId: 2,
   agentId: 1,
 } as const;
+
+export interface HivemindWatsonProjection {
+  relay200: CondensedRelay200;
+  relay300: CondensedRelay300;
+  progressSignal: HivemindBaseSignal<HivemindBuilderProgress>;
+  reducedState: HivemindReducedStatePacket;
+  reducerPacket: HivemindReducerPacket;
+}
 
 export class WatsonFilter {
   private eventBus: EventBus;
@@ -57,6 +74,21 @@ export class WatsonFilter {
     });
 
     return { relay200, relay300 };
+  }
+
+  projectHivemindState(normalized: NormalizedAgentSummary): HivemindWatsonProjection {
+    const { relay200, relay300 } = this.condense(normalized);
+    const progressSignal = buildProgressSignal(normalized);
+    const reducedState = buildReducedStatePacket(normalized, progressSignal);
+    const reducerPacket = buildReducerPacket(normalized);
+
+    return {
+      relay200,
+      relay300,
+      progressSignal,
+      reducedState,
+      reducerPacket,
+    };
   }
 
   async condenseAndEmit(
@@ -200,4 +232,18 @@ function truncatePayloadToBudgetWithPriority<T extends object>(
 }
 
 export { WatsonFilter as SummaryCondenseService };
-export type { NormalizedAgentSummary, CondensedRelay200, CondensedRelay300 };
+export type {
+  NormalizedAgentSummary,
+  CondensedRelay200,
+  CondensedRelay300,
+  HivemindBaseSignal,
+  HivemindBuilderProgress,
+  HivemindReducedStatePacket,
+  HivemindReducerPacket,
+};
+export {
+  buildBuilderProgress,
+  buildProgressSignal,
+  buildReducedStatePacket,
+  buildReducerPacket,
+} from './hivemind-v2';

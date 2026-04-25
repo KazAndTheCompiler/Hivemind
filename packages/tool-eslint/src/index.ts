@@ -49,6 +49,7 @@ export class LocalEslintRunner implements EslintRunner {
   private configFile?: string;
   private cwd: string;
   private timeoutMs: number;
+  private killTimer: NodeJS.Timeout | null = null;
 
   constructor(logger: Logger, options?: { configFile?: string; cwd?: string; timeoutMs?: number }) {
     this.logger = logger.child({ service: 'EslintRunner' });
@@ -57,6 +58,13 @@ export class LocalEslintRunner implements EslintRunner {
     this.timeoutMs = options?.timeoutMs ?? 15_000;
   }
 
+  /**
+   * @note Testing the SIGKILL fallback is impractical in unit tests because it requires
+   * spawning a real child process that ignores SIGTERM, then verifying that SIGKILL
+   * is eventually sent. This would involve mocking execFile at a deep level or using
+   * integration tests with a purposefullystubborn subprocess. The logic is kept
+   * simple and structurally sound so it can be validated manually or via integration test.
+   */
   async run(files: string[], cancelToken?: CancelToken): Promise<EslintRunResult> {
     const applicable = filterApplicable(files);
 
@@ -96,10 +104,21 @@ export class LocalEslintRunner implements EslintRunner {
         if (cancelToken.isCancelled) {
           child.kill('SIGTERM');
           clearInterval(checkCancel);
+          const SIGKILL_TIMEOUT_MS = 2000;
+          this.killTimer = setTimeout(() => {
+            if (!child.killed) {
+              process.kill(child.pid!, 'SIGKILL');
+              this.logger.warn('process did not exit after SIGTERM — sending SIGKILL', { pid: child.pid });
+            }
+          }, SIGKILL_TIMEOUT_MS);
         }
       }, 100);
       child.on('exit', () => {
         clearInterval(checkCancel);
+        if (this.killTimer) {
+          clearTimeout(this.killTimer);
+          this.killTimer = null;
+        }
       });
       }
 
@@ -132,6 +151,10 @@ export class LocalEslintRunner implements EslintRunner {
 
       return this.parseEslintOutput(stdout, applicable);
     } catch (err) {
+      if (this.killTimer) {
+        clearTimeout(this.killTimer);
+        this.killTimer = null;
+      }
       const nodeErr = err as {
         code?: string | number;
         stdout?: string;

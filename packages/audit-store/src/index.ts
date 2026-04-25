@@ -20,6 +20,15 @@ export interface DeadLetterRecord {
   capturedAt: string;
 }
 
+/** DLQ record written when a persistent audit write fails after all retries. */
+export interface DlqRecord {
+  /** Original audit payload that failed to persist */
+  payload: AuditRecord;
+  failedAt: string;
+  errorMessage: string;
+  attempts: number;
+}
+
 export interface AuditReplayOptions {
   fromSequence?: number;
   toSequence?: number;
@@ -210,6 +219,7 @@ type PendingWrite = PendingAuditWrite | PendingDeadLetterWrite;
 export class DurableFileAuditStore {
   private storePath: string;
   private deadLetterPath: string;
+  private dlqPath: string;
   private logger: Logger;
   private writeQueue: PendingWrite[] = [];
   private flushing = false;
@@ -224,16 +234,19 @@ export class DurableFileAuditStore {
   constructor(storePath: string, deadLetterPath: string, logger: Logger) {
     this.storePath = storePath;
     this.deadLetterPath = deadLetterPath;
+    this.dlqPath = path.join(storePath, 'dlq');
     this.logger = logger.child({ service: 'DurableFileAuditStore' });
 
     // Ensure directories exist
     try {
       fs.mkdirSync(this.storePath, { recursive: true });
       fs.mkdirSync(this.deadLetterPath, { recursive: true });
+      fs.mkdirSync(this.dlqPath, { recursive: true });
     } catch (err) {
       this.logger.error('audit.store.mkdir_error', {
         storePath: this.storePath,
         deadLetterPath: this.deadLetterPath,
+        dlqPath: this.dlqPath,
         error: err instanceof Error ? err.message : String(err),
       });
       throw new AuditStoreError(
@@ -253,6 +266,7 @@ export class DurableFileAuditStore {
   /**
    * Queue an event for durable persistence.
    * Writes to both JSONL log and file-per-event for backward compatibility.
+   * On failure after 3 attempts, the record is sent to the dead-letter queue.
    */
   async persist(event: OpenClawEvent): Promise<AuditRecord> {
     const id = this.generateId(event);
@@ -262,29 +276,87 @@ export class DurableFileAuditStore {
       persistedAt: new Date().toISOString(),
     };
 
-    // Write to JSONL log
-    await this.auditLog.append(record);
+    let lastError: Error | null = null;
+    const MAX_ATTEMPTS = 3;
 
-    // Route to specific JSONL log
-    if (
-      event.kind === 'relay.condensed' ||
-      event.kind === 'relay.delivered' ||
-      event.kind === 'relay.delivery_failed'
-    ) {
-      await this.relayLog.append(record);
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        // Write to JSONL log
+        await this.auditLog.append(record);
+
+        // Route to specific JSONL log
+        if (
+          event.kind === 'relay.condensed' ||
+          event.kind === 'relay.delivered' ||
+          event.kind === 'relay.delivery_failed'
+        ) {
+          await this.relayLog.append(record);
+        }
+        if (event.kind === 'quality.gate.completed') {
+          await this.qualityLog.append(record);
+        }
+
+        // Also write file-per-event for backward compatibility (queued)
+        const filePath = path.join(this.storePath, `${id}.json`);
+        const content = JSON.stringify(record, null, 2);
+
+        await fs.promises.writeFile(filePath, content, 'utf-8');
+        return record;
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        this.logger.warn('audit.persist.attempt_failed', {
+          attempt,
+          maxAttempts: MAX_ATTEMPTS,
+          id,
+          kind: event.kind,
+          error: lastError.message,
+        });
+        if (attempt < MAX_ATTEMPTS) {
+          // exponential backoff: 100ms, 200ms, 400ms
+          await new Promise((r) => setTimeout(r, 100 * Math.pow(2, attempt - 1)));
+        }
+      }
     }
-    if (event.kind === 'quality.gate.completed') {
-      await this.qualityLog.append(record);
+
+    // All retries exhausted — write to DLQ
+    const taskId = 'taskId' in event && typeof event.taskId === 'string' ? event.taskId : id;
+    const dlqFileName = `${Date.now()}-${taskId}.json`;
+    const dlqFilePath = path.join(this.dlqPath, dlqFileName);
+    const dlqRecord: DlqRecord = {
+      payload: record,
+      failedAt: new Date().toISOString(),
+      errorMessage: lastError?.message ?? 'unknown',
+      attempts: MAX_ATTEMPTS,
+    };
+
+    await fs.promises.writeFile(dlqFilePath, JSON.stringify(dlqRecord, null, 2), 'utf-8');
+    this.logger.warn('audit record written to DLQ', { dlqPath: this.dlqPath, taskId });
+
+    return record;
+  }
+
+  /** List all DLQ records. */
+  async listDlq(): Promise<DlqRecord[]> {
+    if (!fs.existsSync(this.dlqPath)) return [];
+    const files = await fs.promises.readdir(this.dlqPath);
+    const jsonFiles = files.filter((f) => f.endsWith('.json'));
+    const records: DlqRecord[] = [];
+    for (const file of jsonFiles) {
+      try {
+        const content = await fs.promises.readFile(path.join(this.dlqPath, file), 'utf-8');
+        records.push(JSON.parse(content) as DlqRecord);
+      } catch {
+        // skip unparseable files
+      }
     }
+    return records.sort((a, b) => a.failedAt.localeCompare(b.failedAt));
+  }
 
-    // Also write file-per-event for backward compatibility (queued)
-    const filePath = path.join(this.storePath, `${id}.json`);
-    const content = JSON.stringify(record, null, 2);
-
-    return new Promise<AuditRecord>((resolve, reject) => {
-      this.writeQueue.push({ filePath, content, type: 'audit', resolve, reject });
-      this.scheduleFlush();
-    });
+  /** Number of records currently in the DLQ. */
+  async dlqCount(): Promise<number> {
+    if (!fs.existsSync(this.dlqPath)) return 0;
+    const files = await fs.promises.readdir(this.dlqPath);
+    return files.filter((f) => f.endsWith('.json')).length;
   }
 
   async persistDeadLetter(event: unknown, reason: string): Promise<DeadLetterRecord> {
